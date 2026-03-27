@@ -1,0 +1,86 @@
+project:
+  name: traffic_scene_graph_governance
+  goal: >
+    Build a reproducible evaluation protocol for scene-graph-driven traffic governance,
+    with measurable accuracy, robustness, and efficiency.
+
+scope:
+  keep_visual_to_scene_graph_pipeline_unchanged: true
+  evaluate_downstream_governance_only: true
+
+primary_tasks:
+  - id: T1
+    name: relation_anomaly_detection
+    level: frame
+    description: Detect frame-level anomalies from scene graph relations.
+  - id: T2
+    name: temporal_event_detection
+    level: temporal
+    description: Detect contiguous event segments and peak-risk frames.
+  - id: T3
+    name: deadlock_identification
+    level: structural
+    description: Identify unresolved conflict cycles in relation graphs.
+
+dataset:
+  source:
+    scene_graph_dir: d:/Research/Project2/infrastructure/data/infrastructure-side/scene_graph_results
+    bev_dir: d:/Research/Project2/infrastructure/data/infrastructure-side/intersection_vis_results
+    raw_image_dir: d:/Research/Project2/dairv2xspd/dairv2xspd/frames
+  split_policy:
+    method: fixed_by_frame_id
+    train_ratio: 0.7
+    val_ratio: 0.1
+    test_ratio: 0.2
+    random_seed: 42
+  report_split_manifest: true
+
+metrics:
+  frame_level:
+    - precision
+    - recall
+    - f1
+  temporal_level:
+    - event_precision
+    - event_recall
+    - event_f1
+    - segment_iou
+  structural_level:
+    - deadlock_precision
+    - deadlock_recall
+    - deadlock_f1
+  efficiency:
+    - p50_latency_ms
+    - p95_latency_ms
+    - throughput_fps
+    - peak_memory_mb
+
+baselines_required:
+  - rule_only
+  - graph_only
+  - llm_only
+  - full_system
+
+ablations_required:
+  - remove_temporal_segmenter
+  - remove_knowledge_pruning
+  - remove_llm_reasoning
+  - disable_conflict_chain_logic
+
+robustness_required:
+  - cross_scene_generalization
+  - calibration_noise_sensitivity
+  - relation_noise_sensitivity
+
+statistics:
+  repeated_runs: 3
+  confidence_interval: 95
+  report_mean_and_std: true
+
+acceptance_gate:
+  must_have:
+    - full_baseline_matrix
+    - full_ablation_matrix
+    - robustness_results
+    - efficiency_accuracy_tradeoff
+    - reproducible_run_scripts

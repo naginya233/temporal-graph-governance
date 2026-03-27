@@ -1,0 +1,6 @@
+ablation_id,change,expected_impact,enabled,run_config,key_metric,notes
+A0,remove_temporal_consistency_calibration,Higher frame-level jitter and lower temporal stability,TRUE,configs/suite_example.json::ablate_temporal_calibration,temporal_consistency_score,Use --disable-temporal-calibration
+A1,remove_knowledge_pruning,Latency increase,TRUE,configs/suite_example.json::ablate_pruning,p95_latency_ms,Need optional switch in pipeline
+A2,remove_llm_reasoning,Potential semantic reasoning drop,TRUE,configs/suite_example.json::ablate_llm,event_f1,Use --no-llm
+A3,remove_conflict_chain_logic,Conflict propagation recall drop,TRUE,configs/suite_example.json::ablate_chain,deadlock_f1,Need analyzer switch
+A4,only_following_signal,Lower anomaly coverage,FALSE,,frame_f1,Optional deep ablation

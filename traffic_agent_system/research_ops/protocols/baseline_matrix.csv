@@ -1,0 +1,6 @@
+baseline_id,category,description,enabled,run_config,primary_metric,target_or_note
+B0,rule_only,Current rule and graph analyzer without LLM,TRUE,configs/suite_example.json::rule_only,frame_f1,Reference baseline
+B1,llm_only,LLM reasoning without graph structural modules,FALSE,configs/suite_example.json::llm_only,event_f1,Add later if pipeline supports
+B2,graph_only,Graph structural reasoning without LLM,TRUE,configs/suite_example.json::graph_only,deadlock_f1,Core non-LLM baseline
+B3,full_system,Graph plus optional LLM and temporal segmentation,TRUE,configs/suite_example.json::full_system,event_f1,Primary comparison model
+B4,external_sota,External reproducible baseline on same split,FALSE,,event_f1,Fill when integrated

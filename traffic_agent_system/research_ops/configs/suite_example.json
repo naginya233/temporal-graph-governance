@@ -1,0 +1,52 @@
+{
+  "suite_name": "cvpr_pre_submission_suite",
+  "python_executable": "d:/Research/Project2/.venv/bin/python.exe",
+  "pipeline_script": "d:/Research/Project2/traffic_agent_system/pipeline.py",
+  "output_root": "d:/Research/Project2/traffic_agent_system/research_ops/results",
+  "common": {
+    "data_dir": "d:/Research/Project2/infrastructure/data/infrastructure-side/scene_graph_results",
+    "bev_dir": "d:/Research/Project2/infrastructure/data/infrastructure-side/intersection_vis_results",
+    "raw_image_dir": "d:/Research/Project2/dairv2xspd/dairv2xspd/frames",
+    "max_frames": 500,
+    "model": "qwen3-vl:4b",
+    "no_report": false
+  },
+  "experiments": [
+    {
+      "name": "rule_only",
+      "params": {
+        "no_llm": true,
+        "max_frames": 500
+      }
+    },
+    {
+      "name": "graph_only",
+      "params": {
+        "no_llm": true,
+        "max_frames": 2000
+      }
+    },
+    {
+      "name": "full_system",
+      "params": {
+        "no_llm": false,
+        "max_frames": 500
+      }
+    },
+    {
+      "name": "ablate_llm",
+      "params": {
+        "no_llm": true,
+        "max_frames": 500
+      }
+    },
+    {
+      "name": "ablate_temporal_calibration",
+      "params": {
+        "no_llm": true,
+        "disable_temporal_calibration": true,
+        "max_frames": 500
+      }
+    }
+  ]
+}

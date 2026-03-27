@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Virtual env
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Pipeline outputs
+traffic_agent_system/outputs/
+traffic_agent_system/research_ops/results/*
+!traffic_agent_system/research_ops/results/.gitkeep
+
+# Generated artifacts
+*.jsonl
+*_summary.json
+*_summary.md
+*_review.html
+stdout.log
+stderr.log
+manifest.json
+suite_manifest.json
+
+# Local runtime state (validator)
+DairV2X_SceneGraph_Validator/web_config.json
+DairV2X_SceneGraph_Validator/validation_index.json
+DairV2X_SceneGraph_Validator/governance_validation_index.json
+
+# Git metadata from source folder copy
+DairV2X_SceneGraph_Validator/.git/
