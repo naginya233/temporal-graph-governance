@@ -1,9 +1,13 @@
 from typing import Any, Dict, List, Set, Tuple
 
 RISK_RELATIONS = {
-    "conflict_with",
-    "yielding_to",
-    "crossing",
+    "following",
+}
+
+SLOWDOWN_CLASS_LABELS = {
+    "normal_controlled_queue": "正常受控排队",
+    "sustained_slowdown": "持续缓行",
+    "anomalous_slowdown": "异常缓行",
 }
 
 
@@ -16,10 +20,10 @@ def _risk_level_from_score(score: float) -> str:
 
 
 class TemporalConsistencyCalibrator:
-    """Temporal consistency calibrator for frame-level risk outputs.
+    """Temporal consistency calibrator for frame-level slow-queue outputs.
 
     The module adjusts risk by combining:
-    1) persistence boost for stable risky relation edges,
+    1) persistence boost for stable following relation edges,
     2) transient penalty for one-frame noisy edges,
     3) exponential moving average smoothing across frames.
     """
@@ -84,8 +88,8 @@ class TemporalConsistencyCalibrator:
         scene_graph_dict: Dict[str, Any],
         event_analysis: Dict[str, Any],
     ) -> Dict[str, Any]:
-        raw_risk = dict(event_analysis.get("risk", {}))
-        raw_score = float(raw_risk.get("score", 0))
+        raw_slowdown = dict(event_analysis.get("slowdown") or event_analysis.get("risk") or {})
+        raw_score = float(raw_slowdown.get("score", 0))
 
         current_edges = self._extract_risky_edges(scene_graph_dict)
         self._update_streak(current_edges)
@@ -105,12 +109,12 @@ class TemporalConsistencyCalibrator:
         calibrated_score = int(round(smoothed_score))
         calibrated_level = _risk_level_from_score(calibrated_score)
 
-        raw_level = str(raw_risk.get("level", _risk_level_from_score(raw_score))).lower()
+        raw_level = str(raw_slowdown.get("level", _risk_level_from_score(raw_score))).lower()
         if calibrated_level != raw_level:
             self.changed_level_frames += 1
 
-        calibrated_risk = dict(raw_risk)
-        calibrated_risk.update(
+        calibrated_slowdown = dict(raw_slowdown)
+        calibrated_slowdown.update(
             {
                 "score": calibrated_score,
                 "level": calibrated_level,
@@ -125,6 +129,15 @@ class TemporalConsistencyCalibrator:
             }
         )
 
+        slowdown_class = str(calibrated_slowdown.get("class", "")).strip().lower()
+        if not slowdown_class:
+            slowdown_class = "sustained_slowdown" if calibrated_level in {"medium", "high"} else "normal_controlled_queue"
+            calibrated_slowdown["class"] = slowdown_class
+        if "class_label" not in calibrated_slowdown:
+            calibrated_slowdown["class_label"] = SLOWDOWN_CLASS_LABELS.get(slowdown_class, slowdown_class)
+        calibrated_slowdown["is_slowdown"] = slowdown_class in {"sustained_slowdown", "anomalous_slowdown"}
+        calibrated_slowdown["is_abnormal"] = slowdown_class == "anomalous_slowdown"
+
         self.prev_risky_edges = current_edges
         self.ema_score = smoothed_score
         self.frame_count += 1
@@ -134,9 +147,12 @@ class TemporalConsistencyCalibrator:
 
         return {
             "frame_id": frame_id,
-            "raw_risk": raw_risk,
-            "calibrated_risk": calibrated_risk,
+            "raw_slowdown": raw_slowdown,
+            "calibrated_slowdown": calibrated_slowdown,
+            "raw_risk": dict(raw_slowdown),
+            "calibrated_risk": dict(calibrated_slowdown),
             "temporal_features": {
+                "slowdown_edge_count": len(current_edges),
                 "risky_edge_count": len(current_edges),
                 "persistent_edge_count": len(persistent_edges),
                 "transient_edge_count": len(transient_edges),

@@ -27,6 +27,28 @@ def _default_governance_outputs_dir() -> str:
     return os.path.normpath(os.path.join(_default_traffic_system_dir(), "outputs"))
 
 
+def _default_dair_root_dir() -> str:
+    return os.path.normpath(os.path.join(BASE_DIR, "..", "..", "dairv2xspd", "dairv2xspd"))
+
+
+def _default_label_virtuallidar_dir() -> str:
+    return os.path.normpath(os.path.join(_default_dair_root_dir(), "label", "virtuallidar"))
+
+
+def _default_label_camera_dir() -> str:
+    return os.path.normpath(os.path.join(_default_dair_root_dir(), "label", "camera"))
+
+
+def _default_calib_virtuallidar_to_world_dir() -> str:
+    return os.path.normpath(os.path.join(_default_dair_root_dir(), "calib", "virtuallidar_to_world"))
+
+
+def _default_map_elements_dir() -> str:
+    return os.path.normpath(
+        os.path.join(BASE_DIR, "..", "..", "infrastructure", "data", "infrastructure-side", "map_elements_results")
+    )
+
+
 # 默认路径与运行配置
 config: Dict[str, Any] = {
     "sg_dir": "",
@@ -40,10 +62,20 @@ config: Dict[str, Any] = {
     "pipeline_data_dir": "",
     "pipeline_bev_dir": "",
     "pipeline_raw_image_dir": "",
+    "pipeline_label_virtuallidar_dir": _default_label_virtuallidar_dir(),
+    "pipeline_label_camera_dir": _default_label_camera_dir(),
+    "pipeline_calib_virtuallidar_to_world_dir": _default_calib_virtuallidar_to_world_dir(),
+    "pipeline_map_elements_dir": _default_map_elements_dir(),
     "pipeline_model": "qwen3-vl:4b",
     "pipeline_max_frames": 20,
     "pipeline_use_llm": True,
     "pipeline_generate_report": True,
+    "pipeline_following_filter_enabled": True,
+    "pipeline_following_min_longitudinal_gap": 1.5,
+    "pipeline_following_max_longitudinal_gap": 35.0,
+    "pipeline_following_max_lateral_offset": 3.2,
+    "pipeline_following_min_heading_cos": 0.35,
+    "pipeline_following_require_same_lane": True,
 }
 
 TARGET_RELATIONS = [
@@ -55,11 +87,13 @@ TARGET_RELATIONS = [
     "leave_from",
 ]
 
-RISK_WEIGHT = {
+LEVEL_WEIGHT = {
     "low": 0,
     "medium": 1,
     "high": 2,
 }
+# 向后兼容旧变量名
+RISK_WEIGHT = LEVEL_WEIGHT
 
 index_data: List[Dict[str, Any]] = []
 gov_index_data: List[Dict[str, Any]] = []
@@ -135,6 +169,14 @@ def _as_int(value: Any, default: int, minimum: int = 1, maximum: int = 200000) -
     return max(minimum, min(maximum, parsed))
 
 
+def _as_float(value: Any, default: float, minimum: float = -1e12, maximum: float = 1e12) -> float:
+    try:
+        parsed = float(value)
+    except Exception:
+        return default
+    return max(minimum, min(maximum, parsed))
+
+
 def _iso_mtime(path: str) -> str:
     try:
         ts = os.path.getmtime(path)
@@ -182,21 +224,47 @@ def _normalize_frame_id(frame_id: Any) -> str:
     return value
 
 
-def _dominant_causes_from_risk(risk: Dict[str, Any]) -> List[str]:
+def _extract_slowdown_from_event(event_analysis: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(event_analysis, dict):
+        return {}
+
+    for key in ("slowdown", "risk", "calibrated_slowdown", "calibrated_risk", "raw_slowdown", "raw_risk"):
+        payload = event_analysis.get(key)
+        if isinstance(payload, dict):
+            return payload
+    return {}
+
+
+def _dominant_causes_from_slowdown(slowdown: Dict[str, Any]) -> List[str]:
+    explicit = slowdown.get("causes")
+    if isinstance(explicit, list):
+        normalized = [str(item) for item in explicit if str(item).strip()]
+        if normalized:
+            return normalized
+
     causes: List[str] = []
-    if int(risk.get("yielding_cnt", 0)) > 0:
-        causes.append("yielding_disorder")
-    if int(risk.get("chain_cnt", 0)) > 0:
-        causes.append("conflict_chain")
-    if int(risk.get("deadlock_cnt", 0)) > 0:
-        causes.append("deadlock")
-    if bool(risk.get("cycle_detected", False)):
+    if int(slowdown.get("max_chain", 0)) >= 6:
+        causes.append("long_convoy")
+    if int(slowdown.get("convoy_cnt", 0)) >= 2:
+        causes.append("multi_convoy")
+    elif int(slowdown.get("convoy_cnt", 0)) >= 1:
+        causes.append("single_convoy")
+    if int(slowdown.get("merge_cnt", 0)) > 0:
+        causes.append("merge_bottleneck")
+    if float(slowdown.get("queue_density", 0.0)) >= 1.0:
+        causes.append("dense_following")
+    if bool(slowdown.get("cycle_detected", False)):
         causes.append("following_cycle")
-    if int(risk.get("bottleneck_cnt", 0)) > 0 or int(risk.get("max_chain", 0)) >= 4:
-        causes.append("following_bottleneck")
-    if not causes and int(risk.get("score", 0)) > 0:
-        causes.append("other_risk")
+    if not causes and int(slowdown.get("score", 0)) > 0:
+        causes.append("other_slowdown")
+    if not causes:
+        causes.append("controlled_queue")
     return causes
+
+
+def _dominant_causes_from_risk(risk: Dict[str, Any]) -> List[str]:
+    # 向后兼容旧函数名
+    return _dominant_causes_from_slowdown(risk)
 
 
 def _pick_selected_run(runs: List[Dict[str, str]]) -> str:
@@ -228,10 +296,36 @@ def _sync_pipeline_defaults() -> None:
     if not _normalize_path(config.get("pipeline_raw_image_dir", "")):
         config["pipeline_raw_image_dir"] = _normalize_path(config.get("img_dir", ""))
 
+    if not _normalize_path(config.get("pipeline_label_virtuallidar_dir", "")):
+        config["pipeline_label_virtuallidar_dir"] = _default_label_virtuallidar_dir()
+    else:
+        config["pipeline_label_virtuallidar_dir"] = _normalize_path(config.get("pipeline_label_virtuallidar_dir", ""))
+
+    if not _normalize_path(config.get("pipeline_label_camera_dir", "")):
+        config["pipeline_label_camera_dir"] = _default_label_camera_dir()
+    else:
+        config["pipeline_label_camera_dir"] = _normalize_path(config.get("pipeline_label_camera_dir", ""))
+
+    if not _normalize_path(config.get("pipeline_calib_virtuallidar_to_world_dir", "")):
+        config["pipeline_calib_virtuallidar_to_world_dir"] = _default_calib_virtuallidar_to_world_dir()
+    else:
+        config["pipeline_calib_virtuallidar_to_world_dir"] = _normalize_path(config.get("pipeline_calib_virtuallidar_to_world_dir", ""))
+
+    if not _normalize_path(config.get("pipeline_map_elements_dir", "")):
+        config["pipeline_map_elements_dir"] = _default_map_elements_dir()
+    else:
+        config["pipeline_map_elements_dir"] = _normalize_path(config.get("pipeline_map_elements_dir", ""))
+
     config["pipeline_model"] = str(config.get("pipeline_model", "qwen3-vl:4b") or "qwen3-vl:4b")
     config["pipeline_max_frames"] = _as_int(config.get("pipeline_max_frames", 20), default=20)
     config["pipeline_use_llm"] = _as_bool(config.get("pipeline_use_llm", True), default=True)
     config["pipeline_generate_report"] = _as_bool(config.get("pipeline_generate_report", True), default=True)
+    config["pipeline_following_filter_enabled"] = _as_bool(config.get("pipeline_following_filter_enabled", True), default=True)
+    config["pipeline_following_min_longitudinal_gap"] = _as_float(config.get("pipeline_following_min_longitudinal_gap", 1.5), default=1.5, minimum=0.0, maximum=100.0)
+    config["pipeline_following_max_longitudinal_gap"] = _as_float(config.get("pipeline_following_max_longitudinal_gap", 35.0), default=35.0, minimum=1.0, maximum=300.0)
+    config["pipeline_following_max_lateral_offset"] = _as_float(config.get("pipeline_following_max_lateral_offset", 3.2), default=3.2, minimum=0.2, maximum=50.0)
+    config["pipeline_following_min_heading_cos"] = _as_float(config.get("pipeline_following_min_heading_cos", 0.35), default=0.35, minimum=-1.0, maximum=1.0)
+    config["pipeline_following_require_same_lane"] = _as_bool(config.get("pipeline_following_require_same_lane", True), default=True)
 
 
 
@@ -379,9 +473,34 @@ def build_or_load_governance_index(force_rebuild: bool = False) -> None:
                     continue
 
                 event_analysis = record.get("event_analysis") or {}
-                risk = event_analysis.get("risk") or {}
-                risk_level = str(risk.get("level", "low")).lower()
-                risk_score = int(risk.get("score", 0))
+                slowdown = _extract_slowdown_from_event(event_analysis)
+                slowdown_level = str(slowdown.get("level", "low")).lower()
+                slowdown_score = int(slowdown.get("score", 0))
+                slowdown_class = str(slowdown.get("class", "normal_controlled_queue"))
+
+                raw_slowdown_objects = slowdown.get("slowdown_objects")
+                slowdown_objects: List[Dict[str, Any]] = [
+                    item for item in raw_slowdown_objects if isinstance(item, dict)
+                ] if isinstance(raw_slowdown_objects, list) else []
+
+                raw_individual_entities = slowdown.get("individual_entities")
+                slowdown_individual_entities: List[str] = [
+                    str(item) for item in raw_individual_entities
+                ] if isinstance(raw_individual_entities, list) else []
+
+                raw_source_entities = slowdown.get("source_entities")
+                slowdown_source_entities: List[str] = [
+                    str(item) for item in raw_source_entities
+                ] if isinstance(raw_source_entities, list) else []
+
+                raw_source_summary = slowdown.get("source_summary")
+                slowdown_source_summary: Dict[str, Any] = raw_source_summary if isinstance(raw_source_summary, dict) else {}
+
+                raw_object_count = slowdown.get("slowdown_object_count")
+                try:
+                    slowdown_object_count = int(raw_object_count) if raw_object_count is not None else len(slowdown_objects)
+                except Exception:
+                    slowdown_object_count = len(slowdown_objects)
 
                 assets = record.get("assets") or {}
                 raw_image = assets.get("raw_image") or os.path.join(_normalize_path(config.get("img_dir", "")), f"{frame_id}.jpg")
@@ -392,9 +511,20 @@ def build_or_load_governance_index(force_rebuild: bool = False) -> None:
                     {
                         "frame_id": frame_id,
                         "file": record.get("file", ""),
-                        "risk_level": risk_level,
-                        "risk_score": risk_score,
-                        "dominant_causes": _dominant_causes_from_risk(risk),
+                        "slowdown_level": slowdown_level,
+                        "slowdown_score": slowdown_score,
+                        "slowdown_class": slowdown_class,
+                        "slowdown_class_label": slowdown.get("class_label", slowdown_class),
+                        "slowdown_is_slowdown": bool(slowdown.get("is_slowdown", False)),
+                        "slowdown_is_abnormal": bool(slowdown.get("is_abnormal", False)),
+                        "slowdown_objects": slowdown_objects,
+                        "slowdown_individual_entities": slowdown_individual_entities,
+                        "slowdown_source_entities": slowdown_source_entities,
+                        "slowdown_source_summary": slowdown_source_summary,
+                        "slowdown_object_count": slowdown_object_count,
+                        "risk_level": slowdown_level,
+                        "risk_score": slowdown_score,
+                        "dominant_causes": _dominant_causes_from_slowdown(slowdown),
                         "fast_decision": event_analysis.get("fast_decision", ""),
                         "llm_insight": event_analysis.get("llm_insight", ""),
                         "governance_report": record.get("governance_report", ""),
@@ -411,8 +541,8 @@ def build_or_load_governance_index(force_rebuild: bool = False) -> None:
 
     parsed_records.sort(
         key=lambda r: (
-            -int(r.get("risk_score", 0)),
-            -RISK_WEIGHT.get(str(r.get("risk_level", "low")), 0),
+            -int(r.get("slowdown_score", r.get("risk_score", 0))),
+            -LEVEL_WEIGHT.get(str(r.get("slowdown_level", r.get("risk_level", "low"))), 0),
             str(r.get("frame_id", "")),
         )
     )
@@ -532,12 +662,45 @@ def _start_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
     data_dir = _normalize_path(payload.get("data_dir", config.get("pipeline_data_dir", "")))
     bev_dir = _normalize_path(payload.get("bev_dir", config.get("pipeline_bev_dir", "")))
     raw_image_dir = _normalize_path(payload.get("raw_image_dir", config.get("pipeline_raw_image_dir", "")))
+    label_virtuallidar_dir = _normalize_path(payload.get("label_virtuallidar_dir", config.get("pipeline_label_virtuallidar_dir", "")))
+    label_camera_dir = _normalize_path(payload.get("label_camera_dir", config.get("pipeline_label_camera_dir", "")))
+    calib_virtuallidar_to_world_dir = _normalize_path(payload.get("calib_virtuallidar_to_world_dir", config.get("pipeline_calib_virtuallidar_to_world_dir", "")))
+    map_elements_dir = _normalize_path(payload.get("map_elements_dir", config.get("pipeline_map_elements_dir", "")))
     output_dir = _normalize_path(payload.get("output_dir", config.get("gov_outputs_dir", "")))
 
     max_frames = _as_int(payload.get("max_frames", config.get("pipeline_max_frames", 20)), default=20)
     model = str(payload.get("model", config.get("pipeline_model", "qwen3-vl:4b")) or "qwen3-vl:4b")
     use_llm = _as_bool(payload.get("use_llm", config.get("pipeline_use_llm", True)), default=True)
     generate_report = _as_bool(payload.get("generate_report", config.get("pipeline_generate_report", True)), default=True)
+    following_filter_enabled = _as_bool(payload.get("following_filter_enabled", config.get("pipeline_following_filter_enabled", True)), default=True)
+    following_min_longitudinal_gap = _as_float(
+        payload.get("following_min_longitudinal_gap", config.get("pipeline_following_min_longitudinal_gap", 1.5)),
+        default=1.5,
+        minimum=0.0,
+        maximum=100.0,
+    )
+    following_max_longitudinal_gap = _as_float(
+        payload.get("following_max_longitudinal_gap", config.get("pipeline_following_max_longitudinal_gap", 35.0)),
+        default=35.0,
+        minimum=1.0,
+        maximum=300.0,
+    )
+    following_max_lateral_offset = _as_float(
+        payload.get("following_max_lateral_offset", config.get("pipeline_following_max_lateral_offset", 3.2)),
+        default=3.2,
+        minimum=0.2,
+        maximum=50.0,
+    )
+    following_min_heading_cos = _as_float(
+        payload.get("following_min_heading_cos", config.get("pipeline_following_min_heading_cos", 0.35)),
+        default=0.35,
+        minimum=-1.0,
+        maximum=1.0,
+    )
+    following_require_same_lane = _as_bool(
+        payload.get("following_require_same_lane", config.get("pipeline_following_require_same_lane", True)),
+        default=True,
+    )
 
     if not traffic_system_dir:
         traffic_system_dir = _default_traffic_system_dir()
@@ -574,13 +737,33 @@ def _start_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
         bev_dir,
         "--raw-image-dir",
         raw_image_dir,
+        "--label-virtuallidar-dir",
+        label_virtuallidar_dir,
+        "--label-camera-dir",
+        label_camera_dir,
+        "--calib-virtuallidar-to-world-dir",
+        calib_virtuallidar_to_world_dir,
+        "--map-elements-dir",
+        map_elements_dir,
         "--max-frames",
         str(max_frames),
         "--model",
         model,
         "--output-dir",
         output_dir,
+        "--following-min-longitudinal-gap",
+        str(following_min_longitudinal_gap),
+        "--following-max-longitudinal-gap",
+        str(following_max_longitudinal_gap),
+        "--following-max-lateral-offset",
+        str(following_max_lateral_offset),
+        "--following-min-heading-cos",
+        str(following_min_heading_cos),
     ]
+    if not following_filter_enabled:
+        command.append("--disable-following-spatial-filter")
+    if following_require_same_lane:
+        command.append("--following-require-same-lane")
     if not use_llm:
         command.append("--no-llm")
     if not generate_report:
@@ -592,10 +775,20 @@ def _start_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
     config["pipeline_data_dir"] = data_dir
     config["pipeline_bev_dir"] = bev_dir
     config["pipeline_raw_image_dir"] = raw_image_dir
+    config["pipeline_label_virtuallidar_dir"] = label_virtuallidar_dir
+    config["pipeline_label_camera_dir"] = label_camera_dir
+    config["pipeline_calib_virtuallidar_to_world_dir"] = calib_virtuallidar_to_world_dir
+    config["pipeline_map_elements_dir"] = map_elements_dir
     config["pipeline_max_frames"] = max_frames
     config["pipeline_model"] = model
     config["pipeline_use_llm"] = use_llm
     config["pipeline_generate_report"] = generate_report
+    config["pipeline_following_filter_enabled"] = following_filter_enabled
+    config["pipeline_following_min_longitudinal_gap"] = following_min_longitudinal_gap
+    config["pipeline_following_max_longitudinal_gap"] = following_max_longitudinal_gap
+    config["pipeline_following_max_lateral_offset"] = following_max_lateral_offset
+    config["pipeline_following_min_heading_cos"] = following_min_heading_cos
+    config["pipeline_following_require_same_lane"] = following_require_same_lane
     config["gov_outputs_dir"] = output_dir
     save_config()
 
@@ -692,6 +885,14 @@ def update_config():
         config["pipeline_bev_dir"] = _normalize_path(data.get("pipeline_bev_dir"))
     if "pipeline_raw_image_dir" in data:
         config["pipeline_raw_image_dir"] = _normalize_path(data.get("pipeline_raw_image_dir"))
+    if "pipeline_label_virtuallidar_dir" in data:
+        config["pipeline_label_virtuallidar_dir"] = _normalize_path(data.get("pipeline_label_virtuallidar_dir"))
+    if "pipeline_label_camera_dir" in data:
+        config["pipeline_label_camera_dir"] = _normalize_path(data.get("pipeline_label_camera_dir"))
+    if "pipeline_calib_virtuallidar_to_world_dir" in data:
+        config["pipeline_calib_virtuallidar_to_world_dir"] = _normalize_path(data.get("pipeline_calib_virtuallidar_to_world_dir"))
+    if "pipeline_map_elements_dir" in data:
+        config["pipeline_map_elements_dir"] = _normalize_path(data.get("pipeline_map_elements_dir"))
 
     if "pipeline_model" in data:
         config["pipeline_model"] = str(data.get("pipeline_model") or config.get("pipeline_model", "qwen3-vl:4b"))
@@ -701,6 +902,18 @@ def update_config():
         config["pipeline_use_llm"] = _as_bool(data.get("pipeline_use_llm"), default=True)
     if "pipeline_generate_report" in data:
         config["pipeline_generate_report"] = _as_bool(data.get("pipeline_generate_report"), default=True)
+    if "pipeline_following_filter_enabled" in data:
+        config["pipeline_following_filter_enabled"] = _as_bool(data.get("pipeline_following_filter_enabled"), default=True)
+    if "pipeline_following_min_longitudinal_gap" in data:
+        config["pipeline_following_min_longitudinal_gap"] = _as_float(data.get("pipeline_following_min_longitudinal_gap"), default=1.5, minimum=0.0, maximum=100.0)
+    if "pipeline_following_max_longitudinal_gap" in data:
+        config["pipeline_following_max_longitudinal_gap"] = _as_float(data.get("pipeline_following_max_longitudinal_gap"), default=35.0, minimum=1.0, maximum=300.0)
+    if "pipeline_following_max_lateral_offset" in data:
+        config["pipeline_following_max_lateral_offset"] = _as_float(data.get("pipeline_following_max_lateral_offset"), default=3.2, minimum=0.2, maximum=50.0)
+    if "pipeline_following_min_heading_cos" in data:
+        config["pipeline_following_min_heading_cos"] = _as_float(data.get("pipeline_following_min_heading_cos"), default=0.35, minimum=-1.0, maximum=1.0)
+    if "pipeline_following_require_same_lane" in data:
+        config["pipeline_following_require_same_lane"] = _as_bool(data.get("pipeline_following_require_same_lane"), default=True)
 
     _sync_pipeline_defaults()
     save_config()
@@ -751,10 +964,10 @@ def get_governance_state():
     pending = sum(1 for r in gov_index_data if r.get("status") == "pending")
     assessed = total - pending
 
-    risk_distribution = {
-        "high": sum(1 for r in gov_index_data if r.get("risk_level") == "high"),
-        "medium": sum(1 for r in gov_index_data if r.get("risk_level") == "medium"),
-        "low": sum(1 for r in gov_index_data if r.get("risk_level") == "low"),
+    slowdown_distribution = {
+        "high": sum(1 for r in gov_index_data if r.get("slowdown_level", r.get("risk_level")) == "high"),
+        "medium": sum(1 for r in gov_index_data if r.get("slowdown_level", r.get("risk_level")) == "medium"),
+        "low": sum(1 for r in gov_index_data if r.get("slowdown_level", r.get("risk_level")) == "low"),
     }
 
     selected_run = gov_meta.get("selected_run", "")
@@ -770,7 +983,8 @@ def get_governance_state():
             "selected_run": selected_run,
             "summary": gov_meta.get("summary", {}),
             "event_segments": gov_meta.get("event_segments", []),
-            "risk_distribution": risk_distribution,
+            "slowdown_distribution": slowdown_distribution,
+            "risk_distribution": slowdown_distribution,
             "summary_file": summary_path if summary_path and os.path.exists(summary_path) else "",
             "review_html": review_html if review_html and os.path.exists(review_html) else "",
         }

@@ -41,12 +41,12 @@ class TestTemporalConsistencyCalibrator(unittest.TestCase):
 
         frame_1 = calibrator.calibrate(
             frame_id="000001",
-            scene_graph_dict=self._scene_with_edge("A", "conflict_with", "B"),
+            scene_graph_dict=self._scene_with_edge("A", "following", "B"),
             event_analysis=self._event_with_score(8, "high"),
         )
         frame_2 = calibrator.calibrate(
             frame_id="000002",
-            scene_graph_dict=self._scene_with_edge("A", "conflict_with", "B"),
+            scene_graph_dict=self._scene_with_edge("A", "following", "B"),
             event_analysis=self._event_with_score(8, "high"),
         )
 
@@ -65,7 +65,7 @@ class TestTemporalConsistencyCalibrator(unittest.TestCase):
 
         calibrator.calibrate(
             frame_id="000010",
-            scene_graph_dict=self._scene_with_edge("A", "conflict_with", "B"),
+            scene_graph_dict=self._scene_with_edge("A", "following", "B"),
             event_analysis=self._event_with_score(10, "high"),
         )
         frame_2 = calibrator.calibrate(
