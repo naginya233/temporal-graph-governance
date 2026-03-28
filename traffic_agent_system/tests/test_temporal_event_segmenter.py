@@ -5,19 +5,22 @@ from governance.temporal_event_segmenter import TemporalEventSegmenter
 
 class TestTemporalEventSegmenter(unittest.TestCase):
     @staticmethod
-    def _make_record(frame_id, level, score, yielding=0, chain=0, deadlock=0):
+    def _make_record(frame_id, level, score, convoy=0, merge=0, max_chain=0, density=0.0):
         return {
             "frame_id": frame_id,
             "event_analysis": {
                 "risk": {
                     "level": level,
                     "score": score,
-                    "yielding_cnt": yielding,
-                    "chain_cnt": chain,
-                    "deadlock_cnt": deadlock,
+                    "yielding_cnt": 0,
+                    "chain_cnt": 0,
+                    "deadlock_cnt": 0,
                     "bottleneck_cnt": 0,
+                    "convoy_cnt": convoy,
+                    "merge_cnt": merge,
+                    "queue_density": density,
                     "cycle_detected": False,
-                    "max_chain": 0,
+                    "max_chain": max_chain,
                 }
             },
         }
@@ -25,8 +28,8 @@ class TestTemporalEventSegmenter(unittest.TestCase):
     def test_contiguous_active_frames_form_one_segment(self):
         records = [
             self._make_record("000001", "low", 1),
-            self._make_record("000002", "medium", 4, yielding=1),
-            self._make_record("000003", "high", 10, deadlock=1),
+            self._make_record("000002", "medium", 4, convoy=1, max_chain=4),
+            self._make_record("000003", "high", 10, convoy=2, merge=1, max_chain=7),
             self._make_record("000004", "low", 1),
         ]
 
@@ -39,14 +42,14 @@ class TestTemporalEventSegmenter(unittest.TestCase):
         self.assertEqual(segment["end_frame"], "000003")
         self.assertEqual(segment["peak_frame"], "000003")
         self.assertEqual(segment["peak_score"], 10)
-        self.assertIn("yielding_disorder", segment["dominant_causes"])
-        self.assertIn("deadlock", segment["dominant_causes"])
+        self.assertIn("long_convoy", segment["dominant_causes"])
+        self.assertIn("multi_convoy", segment["dominant_causes"])
 
     def test_low_frame_splits_two_segments(self):
         records = [
-            self._make_record("000010", "medium", 5, yielding=1),
+            self._make_record("000010", "medium", 5, convoy=1, max_chain=4),
             self._make_record("000011", "low", 0),
-            self._make_record("000012", "high", 9, chain=1),
+            self._make_record("000012", "high", 9, convoy=2, merge=1, max_chain=6),
         ]
 
         segmenter = TemporalEventSegmenter(min_active_level="medium")
@@ -64,12 +67,15 @@ class TestTemporalEventSegmenter(unittest.TestCase):
                     "calibrated_risk": {
                         "level": "high",
                         "score": 9,
-                        "yielding_cnt": 1,
+                            "yielding_cnt": 0,
                         "chain_cnt": 0,
                         "deadlock_cnt": 0,
                         "bottleneck_cnt": 0,
+                            "convoy_cnt": 1,
+                            "merge_cnt": 0,
+                            "queue_density": 0.8,
                         "cycle_detected": False,
-                        "max_chain": 0,
+                            "max_chain": 4,
                     }
                 },
             }

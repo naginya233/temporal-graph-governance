@@ -11,13 +11,21 @@ class ReviewReportBuilder:
 
     @staticmethod
     def _risk_score(record: Dict[str, Any]) -> int:
-        risk = ((record.get("event_analysis") or {}).get("risk") or {})
+        event_analysis = record.get("event_analysis") or {}
+        risk = event_analysis.get("slowdown") or event_analysis.get("risk") or {}
         return int(risk.get("score", 0))
 
     @staticmethod
     def _risk_level(record: Dict[str, Any]) -> str:
-        risk = ((record.get("event_analysis") or {}).get("risk") or {})
+        event_analysis = record.get("event_analysis") or {}
+        risk = event_analysis.get("slowdown") or event_analysis.get("risk") or {}
         return str(risk.get("level", "low"))
+
+    @staticmethod
+    def _slowdown_class(record: Dict[str, Any]) -> str:
+        event_analysis = record.get("event_analysis") or {}
+        risk = event_analysis.get("slowdown") or event_analysis.get("risk") or {}
+        return str(risk.get("class", "normal_controlled_queue"))
 
     @staticmethod
     def _to_relative_path(base_dir: str, target_path: str) -> str:
@@ -34,20 +42,21 @@ class ReviewReportBuilder:
         output_path: str,
     ) -> None:
         top_records = sorted(records, key=self._risk_score, reverse=True)[:10]
+        levels = summary.get("slowdown_levels") or summary.get("risk_levels") or {}
 
         lines: List[str] = []
-        lines.append("# Traffic Governance Run Summary")
+        lines.append("# Traffic Slow-Queue Run Summary")
         lines.append("")
         lines.append("## Overview")
         lines.append(f"- Processed frames: {summary.get('processed', 0)}")
         lines.append(f"- Skipped frames: {summary.get('skipped', 0)}")
         lines.append(f"- Event segments: {len(event_segments)}")
         lines.append("")
-        lines.append("## Risk Distribution")
-        risk_levels = summary.get("risk_levels", {})
-        lines.append(f"- High: {risk_levels.get('high', 0)}")
-        lines.append(f"- Medium: {risk_levels.get('medium', 0)}")
-        lines.append(f"- Low: {risk_levels.get('low', 0)}")
+
+        lines.append("## Slowdown Distribution")
+        lines.append(f"- Severe Slowdown: {levels.get('high', 0)}")
+        lines.append(f"- Moderate Slowdown: {levels.get('medium', 0)}")
+        lines.append(f"- Light/No Slowdown: {levels.get('low', 0)}")
         lines.append("")
 
         lines.append("## Event Segments")
@@ -65,16 +74,17 @@ class ReviewReportBuilder:
                     )
                 )
         else:
-            lines.append("- No medium/high event segment detected.")
+            lines.append("- No moderate/severe slowdown segment detected.")
         lines.append("")
 
-        lines.append("## Top Risk Frames")
+        lines.append("## Top Slowdown Frames")
         if top_records:
             for rec in top_records:
                 lines.append(
-                    "- frame={fid}, level={lvl}, score={score}".format(
+                  "- frame={fid}, level={lvl}, class={clazz}, score={score}".format(
                         fid=rec.get("frame_id"),
                         lvl=self._risk_level(rec),
+                    clazz=self._slowdown_class(rec),
                         score=self._risk_score(rec),
                     )
                 )
@@ -98,6 +108,7 @@ class ReviewReportBuilder:
     ) -> None:
         top_records = sorted(records, key=self._risk_score, reverse=True)[:20]
         base_dir = os.path.dirname(output_path)
+        levels = summary.get("slowdown_levels") or summary.get("risk_levels") or {}
 
         segment_rows: List[str] = []
         for seg in event_segments:
@@ -126,6 +137,7 @@ class ReviewReportBuilder:
                 "<tr>"
                 f"<td>{escape(str(rec.get('frame_id')))}</td>"
                 f"<td>{escape(self._risk_level(rec))}</td>"
+              f"<td>{escape(self._slowdown_class(rec))}</td>"
                 f"<td>{self._risk_score(rec)}</td>"
                 f"<td>{raw_html}</td>"
                 f"<td>{bev_html}</td>"
@@ -139,7 +151,7 @@ class ReviewReportBuilder:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Traffic Governance Review</title>
+  <title>Traffic Slow-Queue Review</title>
   <style>
     :root {{
       --bg: #f5f6f8;
@@ -195,19 +207,19 @@ class ReviewReportBuilder:
 <body>
   <div class="wrap">
     <div class="header">
-      <h1>Traffic Governance Review</h1>
+      <h1>Traffic Slow-Queue Review</h1>
       <p>JSONL: {escape(str(summary.get("output_file", "")))}</p>
     </div>
 
     <div class="cards">
       <div class="card"><div class="label">Processed</div><div class="value">{summary.get("processed", 0)}</div></div>
-      <div class="card"><div class="label">High Risk Frames</div><div class="value">{(summary.get("risk_levels") or {}).get("high", 0)}</div></div>
+      <div class="card"><div class="label">Severe Slowdown Frames</div><div class="value">{levels.get("high", 0)}</div></div>
       <div class="card"><div class="label">Event Segments</div><div class="value">{len(event_segments)}</div></div>
       <div class="card"><div class="label">Pruning Ratio</div><div class="value">{round(((summary.get("global_pruning") or {}).get("compression_ratio", 0.0)) * 100, 2)}%</div></div>
     </div>
 
     <div class="panel">
-      <h2>Temporal Event Segments</h2>
+      <h2>Temporal Slowdown Segments</h2>
       <table>
         <thead>
           <tr>
@@ -215,21 +227,21 @@ class ReviewReportBuilder:
           </tr>
         </thead>
         <tbody>
-          {''.join(segment_rows) if segment_rows else '<tr><td colspan="5">No medium/high event segment detected.</td></tr>'}
+          {''.join(segment_rows) if segment_rows else '<tr><td colspan="5">No moderate/severe slowdown segment detected.</td></tr>'}
         </tbody>
       </table>
     </div>
 
     <div class="panel">
-      <h2>Top Risk Frames (Raw + BEV + SG)</h2>
+      <h2>Top Slowdown Frames (Raw + BEV + SG)</h2>
       <table>
         <thead>
           <tr>
-            <th>Frame</th><th>Level</th><th>Score</th><th>Raw Image</th><th>BEV</th><th>Scene Graph</th>
+            <th>Frame</th><th>Level</th><th>Class</th><th>Score</th><th>Raw Image</th><th>BEV</th><th>Scene Graph</th>
           </tr>
         </thead>
         <tbody>
-          {''.join(frame_rows) if frame_rows else '<tr><td colspan="6">No records available.</td></tr>'}
+          {''.join(frame_rows) if frame_rows else '<tr><td colspan="7">No records available.</td></tr>'}
         </tbody>
       </table>
     </div>

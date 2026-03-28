@@ -107,6 +107,9 @@
             font-size: 13px;
             font-weight: 700;
             cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
         }
 
         .settings-btn:hover { background: #f8fafc; }
@@ -339,6 +342,7 @@
         }
 
         .image-wrapper {
+            position: relative;
             width: 100%;
             height: 100%;
             min-height: 280px;
@@ -360,6 +364,29 @@
             transition: transform 0.15s ease;
             user-select: none;
             -webkit-user-drag: none;
+        }
+
+        .bev-overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 6;
+            transform-origin: center center;
+        }
+
+        .bev-overlay-status {
+            position: absolute;
+            left: 10px;
+            bottom: 10px;
+            z-index: 11;
+            background: rgba(15, 23, 42, 0.68);
+            color: #ffffff;
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 700;
         }
 
         .analysis {
@@ -384,6 +411,48 @@
             gap: 8px;
         }
 
+        .analysis-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .toggle-bev {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--line);
+            background: #ffffff;
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: 12px;
+            color: #334155;
+            font-weight: 700;
+            user-select: none;
+        }
+
+        .toggle-bev input {
+            margin: 0;
+            accent-color: #0f766e;
+        }
+
+        .mode-pill {
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 12px;
+            font-weight: 700;
+            border: 1px solid var(--line);
+            background: #eef2ff;
+            color: #1e3a8a;
+        }
+
+        .mode-pill.dynamic {
+            background: #dcfce7;
+            color: #166534;
+            border-color: #86efac;
+        }
+
         .chip {
             border-radius: 999px;
             background: #fff7ed;
@@ -405,6 +474,82 @@
             background: #f8fafc;
             max-height: 230px;
             overflow: auto;
+        }
+
+        .flow-grid {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(180px, 1fr));
+            gap: 10px;
+        }
+
+        .flow-col {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #f8fafc;
+            padding: 8px;
+            min-height: 140px;
+        }
+
+        .flow-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .flow-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 240px;
+            overflow: auto;
+        }
+
+        .flow-item {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #ffffff;
+            padding: 6px 8px;
+            font-size: 12px;
+            line-height: 1.35;
+            word-break: break-all;
+            transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+        }
+
+        .flow-item.clickable {
+            cursor: pointer;
+        }
+
+        .flow-item.clickable:hover {
+            border-color: #89a8cc;
+            background: #f0f7ff;
+        }
+
+        .flow-item.active {
+            border-color: #0f766e;
+            background: #dcfce7;
+        }
+
+        .flow-item.related {
+            border-color: #14b8a6;
+            background: #ecfeff;
+        }
+
+        .flow-item.muted {
+            opacity: 0.35;
+        }
+
+        .flow-item strong {
+            color: #0f172a;
+        }
+
+        .flow-empty {
+            color: var(--muted);
+            font-size: 12px;
+            padding: 4px 2px;
         }
 
         .action-bar {
@@ -509,6 +654,7 @@
             .meta-row { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
             header { padding: 12px 12px; }
             main { padding: 12px; }
+            .flow-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -523,6 +669,7 @@
     </div>
     <div class="header-right">
         <div class="progress-text" id="progress-text">加载中...</div>
+        <a class="settings-btn" href="/showcase" target="_blank">展示页面</a>
         <button class="settings-btn" onclick="openSettings()">设置路径</button>
     </div>
 </header>
@@ -594,21 +741,23 @@
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
             <span id="relation-info">RELATION</span>
         </div>
-        <div class="entity" id="object-info">Risk</div>
+        <div class="entity" id="object-info">Slowdown</div>
     </div>
 
     <div class="workspace" id="workspace">
         <div class="image-box">
             <span class="badge">原图</span>
             <div class="image-wrapper" onclick="toggleZoom(0, event)" onmousemove="panZoom(0, event)" onmouseleave="resetZoom(0, event)">
-                <img id="img-original" class="preview" src="" alt="加载中..." onerror="this.alt='无法加载该图片'">
+                <img id="img-original" class="preview zoom-layer" src="" alt="加载中..." onerror="this.alt='无法加载该图片'">
                 <div class="zoom-hint">点击放大并移动查看</div>
             </div>
         </div>
         <div class="image-box">
             <span class="badge">BEV 场景图</span>
             <div class="image-wrapper" onclick="toggleZoom(1, event)" onmousemove="panZoom(1, event)" onmouseleave="resetZoom(1, event)">
-                <img id="img-schematic" class="preview" src="" alt="加载中..." onerror="this.alt='无法加载该图片'">
+                <img id="img-schematic" class="preview zoom-layer" src="" alt="加载中..." onerror="this.alt='无法加载该图片'">
+                <svg id="bev-overlay" class="bev-overlay zoom-layer" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg>
+                <div class="bev-overlay-status" id="bev-overlay-status">未选择车流对象</div>
                 <div class="zoom-hint">点击放大并移动查看</div>
             </div>
         </div>
@@ -617,17 +766,39 @@
     <div class="panel analysis" id="analysis-panel">
         <div class="analysis-top">
             <strong id="run-name">运行记录: -</strong>
-            <div class="chips" id="cause-chips"></div>
+            <div class="analysis-controls">
+                <label class="toggle-bev">
+                    <input type="checkbox" id="toggle-dynamic-bev" onchange="onDynamicBevToggle(this.checked)">
+                    动态高亮 BEV
+                </label>
+                <span id="bev-render-mode" class="mode-pill">静态 BEV</span>
+                <div class="chips" id="cause-chips"></div>
+            </div>
         </div>
+        <div class="flow-grid" id="flow-grid">
+            <div class="flow-col">
+                <div class="flow-title">车流对象</div>
+                <div class="flow-list" id="flow-objects-list"></div>
+            </div>
+            <div class="flow-col">
+                <div class="flow-title">个体</div>
+                <div class="flow-list" id="flow-individuals-list"></div>
+            </div>
+            <div class="flow-col">
+                <div class="flow-title">源头</div>
+                <div class="flow-list" id="flow-sources-list"></div>
+            </div>
+        </div>
+        <div class="flow-empty" id="flow-link-hint">点击任一对象/个体/源头可联动高亮，再次点击取消。</div>
         <pre id="governance-report">治理报告显示区域</pre>
         <pre id="governance-llm" style="display:none;"></pre>
     </div>
 
     <div class="action-bar" id="action-bar">
         <button class="btn soft" id="btn-undo" onclick="undoMark()" disabled>上一张<span class="shortcut">(B)</span></button>
-        <button class="btn warn" id="btn-negative" onclick="handleNegative()">风险存疑<span class="shortcut">(N)</span></button>
+        <button class="btn warn" id="btn-negative" onclick="handleNegative()">缓行存疑<span class="shortcut">(N)</span></button>
         <button class="btn soft" id="btn-skip" onclick="handleSkip()">跳过<span class="shortcut">(S)</span></button>
-        <button class="btn ok" id="btn-positive" onclick="handlePositive()">确认风险<span class="shortcut">(Y)</span></button>
+        <button class="btn ok" id="btn-positive" onclick="handlePositive()">确认缓行<span class="shortcut">(Y)</span></button>
     </div>
 
     <div class="panel done" id="done-view">
@@ -658,6 +829,10 @@
 </div>
 
 <script>
+    const HISTORY_LIMIT = 5;
+    const IDLE_STATE_REFRESH_EVERY = 4;
+    const MAX_OBJECT_RENDER = 12;
+    const MAX_ENTITY_RENDER = 30;
     let currentMode = 'governance';
     let relationState = null;
     let governanceState = null;
@@ -666,6 +841,22 @@
     let currentGovernanceIndex = -1;
     let relationHistory = [];
     let governanceHistory = [];
+    let pipelineFormInitialized = false;
+    let pipelineFormDirty = false;
+    let pipelineFormBound = false;
+    let settingsModalOpen = false;
+    let idlePollCounter = 0;
+    let lastPipelineLogSignature = '';
+    let lastRawImagePath = '';
+    let lastBevImagePath = '';
+    let staticBevPath = '';
+    let currentFrameId = '';
+    let currentFocusEntities = [];
+    let dynamicBevEnabled = false;
+    let lastDynamicSignature = '';
+    let currentBevOverlay = null;
+    let slowdownLinkSelection = null;
+    let slowdownLinkContext = null;
     let isZoomed = [false, false];
     let pipelinePolling = null;
     let lastPipelineRunning = false;
@@ -729,8 +920,8 @@
         const pipelinePanel = document.getElementById('pipeline-panel');
 
         if (currentMode === 'governance') {
-            neg.innerHTML = '风险存疑<span class="shortcut">(N)</span>';
-            pos.innerHTML = '确认风险<span class="shortcut">(Y)</span>';
+            neg.innerHTML = '缓行存疑<span class="shortcut">(N)</span>';
+            pos.innerHTML = '确认缓行<span class="shortcut">(Y)</span>';
             panel.classList.add('show');
             pipelinePanel.style.display = 'block';
         } else {
@@ -747,12 +938,73 @@
         document.getElementById('object-info').innerText = objectText || '-';
     }
 
+    function setSchematicSrc(src, force = false) {
+        const bevImg = document.getElementById('img-schematic');
+        const key = String(src || '');
+        if (!force && key === lastBevImagePath) return;
+        bevImg.src = key;
+        lastBevImagePath = key;
+    }
+
+    function updateBevRenderModeBadge() {
+        const badge = document.getElementById('bev-render-mode');
+        if (!badge) return;
+        const isDynamic = dynamicBevEnabled && currentMode === 'governance' && !!currentFrameId;
+        badge.classList.toggle('dynamic', isDynamic);
+        badge.innerText = isDynamic ? '动态 BEV' : '静态 BEV';
+    }
+
+    function applyBevRenderMode(force = false) {
+        const svg = document.getElementById('bev-overlay');
+        const status = document.getElementById('bev-overlay-status');
+        const useDynamic = dynamicBevEnabled && currentMode === 'governance' && !!currentFrameId;
+
+        updateBevRenderModeBadge();
+
+        // 静态模式不再展示叠加高亮框，动态模式也由后端重渲染直接输出高亮。
+        if (svg) {
+            svg.style.display = 'none';
+            if (!useDynamic) svg.innerHTML = '';
+        }
+        if (status) status.style.display = 'none';
+
+        if (useDynamic) {
+            const entityKey = currentFocusEntities.join(',');
+            const signature = `${currentFrameId}|${entityKey}`;
+            if (force || signature !== lastDynamicSignature) {
+                const timestamp = Date.now();
+                const src = `/api/governance/render_bev?frame_id=${encodeURIComponent(currentFrameId)}&entities=${encodeURIComponent(entityKey)}&t=${timestamp}`;
+                setSchematicSrc(src, true);
+                lastDynamicSignature = signature;
+            }
+            return;
+        }
+
+        lastDynamicSignature = '';
+        if (staticBevPath) {
+            const timestamp = Date.now();
+            setSchematicSrc(`/api/image?path=${encodeURIComponent(staticBevPath)}&t=${timestamp}`, force);
+        } else {
+            setSchematicSrc('', force);
+        }
+    }
+
+    function onDynamicBevToggle(enabled) {
+        dynamicBevEnabled = !!enabled;
+        applyBevRenderMode(true);
+    }
+
     function setImages(rawPath, bevPath) {
-        const timestamp = Date.now();
-        const raw = rawPath ? `/api/image?path=${encodeURIComponent(rawPath)}&t=${timestamp}` : '';
-        const bev = bevPath ? `/api/image?path=${encodeURIComponent(bevPath)}&t=${timestamp}` : '';
-        document.getElementById('img-original').src = raw;
-        document.getElementById('img-schematic').src = bev;
+        const rawImg = document.getElementById('img-original');
+
+        if (rawPath !== lastRawImagePath) {
+            const timestamp = Date.now();
+            rawImg.src = rawPath ? `/api/image?path=${encodeURIComponent(rawPath)}&t=${timestamp}` : '';
+            lastRawImagePath = rawPath || '';
+        }
+
+        staticBevPath = bevPath || '';
+        applyBevRenderMode(false);
     }
 
     function showDone(text) {
@@ -782,7 +1034,417 @@
         });
     }
 
-    async function fetchStates() {
+    function clearSlowdownColumns() {
+        document.getElementById('flow-objects-list').innerHTML = '<div class="flow-empty">暂无对象</div>';
+        document.getElementById('flow-individuals-list').innerHTML = '<div class="flow-empty">暂无个体</div>';
+        document.getElementById('flow-sources-list').innerHTML = '<div class="flow-empty">暂无源头</div>';
+        document.getElementById('flow-link-hint').innerText = '点击任一对象/个体/源头可联动高亮，再次点击取消。';
+        currentFocusEntities = [];
+        renderBevEntityOverlay([]);
+        slowdownLinkSelection = null;
+        slowdownLinkContext = null;
+    }
+
+    function _createSvgEl(name) {
+        return document.createElementNS('http://www.w3.org/2000/svg', name);
+    }
+
+    function setBevOverlayData(data) {
+        if (data && typeof data === 'object') {
+            currentBevOverlay = data;
+        } else {
+            currentBevOverlay = null;
+        }
+        renderBevEntityOverlay([]);
+    }
+
+    function renderBevEntityOverlay(entityIds) {
+        const svg = document.getElementById('bev-overlay');
+        const status = document.getElementById('bev-overlay-status');
+        if (!svg || !status) return;
+
+        svg.innerHTML = '';
+
+        const validIds = Array.from(new Set((entityIds || []).map(v => String(v))));
+        currentFocusEntities = validIds;
+        if (!dynamicBevEnabled || currentMode !== 'governance') {
+            status.style.display = 'none';
+            svg.style.display = 'none';
+            return;
+        }
+        if (dynamicBevEnabled && currentMode === 'governance') {
+            applyBevRenderMode(false);
+        }
+        const noSelectionText = currentMode === 'governance' ? '未选择车流对象' : '关系模式不显示高亮';
+
+        if (!currentBevOverlay || currentMode !== 'governance') {
+            status.innerText = noSelectionText;
+            return;
+        }
+
+        const bounds = currentBevOverlay.world_bounds || {};
+        const minX = Number(bounds.min_x);
+        const maxX = Number(bounds.max_x);
+        const minY = Number(bounds.min_y);
+        const maxY = Number(bounds.max_y);
+        const spanX = maxX - minX;
+        const spanY = maxY - minY;
+
+        if (!(Number.isFinite(spanX) && spanX > 0 && Number.isFinite(spanY) && spanY > 0)) {
+            status.innerText = '缺少世界坐标范围';
+            return;
+        }
+
+        if (validIds.length === 0) {
+            status.innerText = '选择 flow / 个体 / 源头后显示 BEV 高亮';
+            return;
+        }
+
+        const entityPolygons = currentBevOverlay.entity_polygons || {};
+        let renderCount = 0;
+
+        validIds.forEach((entityId, idx) => {
+            const polygons = entityPolygons[entityId];
+            if (!Array.isArray(polygons) || polygons.length === 0) return;
+
+            const hue = (idx * 67) % 360;
+            const strokeColor = `hsl(${hue} 95% 42%)`;
+            const fillColor = `hsla(${hue} 95% 55% / 0.18)`;
+
+            polygons.forEach((poly) => {
+                if (!Array.isArray(poly) || poly.length < 3) return;
+                const projected = poly
+                    .filter(pt => Array.isArray(pt) && pt.length >= 2)
+                    .map(pt => {
+                        const x = Number(pt[0]);
+                        const y = Number(pt[1]);
+                        const nx = ((x - minX) / spanX) * 1000;
+                        const ny = 1000 - ((y - minY) / spanY) * 1000;
+                        return [nx, ny];
+                    })
+                    .filter(pt => Number.isFinite(pt[0]) && Number.isFinite(pt[1]));
+
+                if (projected.length < 3) return;
+
+                const polygonEl = _createSvgEl('polygon');
+                polygonEl.setAttribute('points', projected.map(pt => `${pt[0].toFixed(1)},${pt[1].toFixed(1)}`).join(' '));
+                polygonEl.setAttribute('fill', fillColor);
+                polygonEl.setAttribute('stroke', strokeColor);
+                polygonEl.setAttribute('stroke-width', '2.4');
+                polygonEl.setAttribute('vector-effect', 'non-scaling-stroke');
+                svg.appendChild(polygonEl);
+
+                renderCount += 1;
+            });
+
+            const firstPoly = polygons[0];
+            if (Array.isArray(firstPoly) && firstPoly.length > 0) {
+                const pts = firstPoly
+                    .filter(pt => Array.isArray(pt) && pt.length >= 2)
+                    .map(pt => [Number(pt[0]), Number(pt[1])])
+                    .filter(pt => Number.isFinite(pt[0]) && Number.isFinite(pt[1]));
+                if (pts.length > 0) {
+                    const cxWorld = pts.reduce((acc, pt) => acc + pt[0], 0) / pts.length;
+                    const cyWorld = pts.reduce((acc, pt) => acc + pt[1], 0) / pts.length;
+                    const cx = ((cxWorld - minX) / spanX) * 1000;
+                    const cy = 1000 - ((cyWorld - minY) / spanY) * 1000;
+                    const labelBg = _createSvgEl('rect');
+                    labelBg.setAttribute('x', String(cx - 20));
+                    labelBg.setAttribute('y', String(cy - 16));
+                    labelBg.setAttribute('width', '40');
+                    labelBg.setAttribute('height', '14');
+                    labelBg.setAttribute('rx', '4');
+                    labelBg.setAttribute('fill', 'rgba(2,6,23,0.72)');
+                    svg.appendChild(labelBg);
+
+                    const label = _createSvgEl('text');
+                    label.setAttribute('x', String(cx));
+                    label.setAttribute('y', String(cy - 6));
+                    label.setAttribute('text-anchor', 'middle');
+                    label.setAttribute('fill', '#fff');
+                    label.setAttribute('font-size', '10');
+                    label.setAttribute('font-weight', '700');
+                    label.textContent = entityId;
+                    svg.appendChild(label);
+                }
+            }
+        });
+
+        if (renderCount === 0) {
+            status.innerText = '未匹配到可叠加对象';
+            return;
+        }
+        status.innerText = `已高亮 ${validIds.length} 个对象`;
+    }
+
+    function renderList(elId, items, formatter, maxItems, emptyText) {
+        const root = document.getElementById(elId);
+        root.innerHTML = '';
+
+        if (!Array.isArray(items) || items.length === 0) {
+            root.innerHTML = `<div class="flow-empty">${emptyText}</div>`;
+            return;
+        }
+
+        const clipped = items.slice(0, maxItems);
+        clipped.forEach((item, idx) => {
+            const div = document.createElement('div');
+            div.className = 'flow-item';
+            div.innerHTML = formatter(item, idx);
+            root.appendChild(div);
+        });
+
+        if (items.length > maxItems) {
+            const tail = document.createElement('div');
+            tail.className = 'flow-empty';
+            tail.innerText = `其余 ${items.length - maxItems} 项已折叠`; 
+            root.appendChild(tail);
+        }
+    }
+
+    function buildSlowdownLinkContext(task) {
+        const objects = Array.isArray(task.slowdown_objects) ? task.slowdown_objects : [];
+        const individualEntities = Array.isArray(task.slowdown_individual_entities) ? task.slowdown_individual_entities : [];
+        const sourceEntities = Array.isArray(task.slowdown_source_entities) ? task.slowdown_source_entities : [];
+        const sourceSummary = task.slowdown_source_summary || {};
+
+        const objectById = new Map();
+        const individualToObjectIds = new Map();
+        const sourceToObjectIds = new Map();
+
+        objects.forEach((obj, idx) => {
+            const flowId = String(obj.flow_id || `flow_${idx + 1}`);
+            objectById.set(flowId, obj);
+
+            const members = Array.isArray(obj.individual_entities) ? obj.individual_entities.map(v => String(v)) : [];
+            const sources = Array.isArray(obj.source_entities) ? obj.source_entities.map(v => String(v)) : [];
+
+            members.forEach(entity => {
+                if (!individualToObjectIds.has(entity)) individualToObjectIds.set(entity, new Set());
+                individualToObjectIds.get(entity).add(flowId);
+            });
+
+            sources.forEach(source => {
+                if (!sourceToObjectIds.has(source)) sourceToObjectIds.set(source, new Set());
+                sourceToObjectIds.get(source).add(flowId);
+            });
+        });
+
+        const sourceCards = sourceEntities.map((entity) => {
+            const text = String(entity);
+            const mergeList = Array.isArray(sourceSummary.merge_bottleneck_sources) ? sourceSummary.merge_bottleneck_sources : [];
+            const cycleList = Array.isArray(sourceSummary.cycle_lock_sources) ? sourceSummary.cycle_lock_sources : [];
+            const headList = Array.isArray(sourceSummary.queue_head_sources) ? sourceSummary.queue_head_sources : [];
+            let sourceType = 'queue_head';
+            if (mergeList.includes(text)) sourceType = 'merge_bottleneck';
+            else if (cycleList.includes(text)) sourceType = 'cycle_lock';
+            else if (headList.includes(text)) sourceType = 'queue_head';
+            return { entity: text, sourceType };
+        });
+
+        return {
+            objects,
+            individualEntities: individualEntities.map(v => String(v)),
+            sourceCards,
+            objectById,
+            individualToObjectIds,
+            sourceToObjectIds,
+        };
+    }
+
+    function resolveLinkedSets(context, selection) {
+        if (!selection || !context) {
+            return {
+                objectIds: new Set(),
+                individuals: new Set(),
+                sources: new Set(),
+            };
+        }
+
+        const objectIds = new Set();
+        const individuals = new Set();
+        const sources = new Set();
+
+        if (selection.type === 'object') {
+            objectIds.add(selection.value);
+        } else if (selection.type === 'individual') {
+            (context.individualToObjectIds.get(selection.value) || new Set()).forEach(id => objectIds.add(id));
+        } else if (selection.type === 'source') {
+            (context.sourceToObjectIds.get(selection.value) || new Set()).forEach(id => objectIds.add(id));
+        }
+
+        objectIds.forEach(id => {
+            const obj = context.objectById.get(id);
+            if (!obj) return;
+
+            const members = Array.isArray(obj.individual_entities) ? obj.individual_entities : [];
+            const sourceList = Array.isArray(obj.source_entities) ? obj.source_entities : [];
+            members.forEach(entity => individuals.add(String(entity)));
+            sourceList.forEach(entity => sources.add(String(entity)));
+        });
+
+        if (selection.type === 'individual') individuals.add(selection.value);
+        if (selection.type === 'source') sources.add(selection.value);
+
+        return { objectIds, individuals, sources };
+    }
+
+    function updateFlowLinkHint(selection) {
+        const hint = document.getElementById('flow-link-hint');
+        if (!selection) {
+            hint.innerText = '点击任一对象/个体/源头可联动高亮，再次点击取消。';
+            return;
+        }
+        const labelMap = {
+            object: '车流对象',
+            individual: '个体',
+            source: '源头',
+        };
+        hint.innerText = `已联动：${labelMap[selection.type] || selection.type} = ${selection.value}`;
+    }
+
+    function toggleSlowdownLink(type, value) {
+        const key = String(value);
+        if (slowdownLinkSelection && slowdownLinkSelection.type === type && slowdownLinkSelection.value === key) {
+            slowdownLinkSelection = null;
+        } else {
+            slowdownLinkSelection = { type, value: key };
+        }
+        if (slowdownLinkContext) {
+            renderSlowdownColumnsFromContext();
+        }
+    }
+
+    function createFlowItem(html, classes, onClick) {
+        const div = document.createElement('div');
+        div.className = `flow-item clickable ${classes.join(' ')}`.trim();
+        div.innerHTML = html;
+        div.onclick = onClick;
+        return div;
+    }
+
+    function renderSlowdownColumnsFromContext() {
+        if (!slowdownLinkContext) {
+            clearSlowdownColumns();
+            return;
+        }
+
+        const objectsRoot = document.getElementById('flow-objects-list');
+        const individualsRoot = document.getElementById('flow-individuals-list');
+        const sourcesRoot = document.getElementById('flow-sources-list');
+
+        objectsRoot.innerHTML = '';
+        individualsRoot.innerHTML = '';
+        sourcesRoot.innerHTML = '';
+
+        const context = slowdownLinkContext;
+        const linked = resolveLinkedSets(context, slowdownLinkSelection);
+        const hasSelection = !!slowdownLinkSelection;
+
+        const objectList = context.objects.slice(0, MAX_OBJECT_RENDER);
+        if (objectList.length === 0) {
+            objectsRoot.innerHTML = '<div class="flow-empty">暂无车流对象</div>';
+        } else {
+            objectList.forEach((obj, idx) => {
+                const flowId = String(obj.flow_id || `flow_${idx + 1}`);
+                const kind = obj.flow_kind || '-';
+                const members = Array.isArray(obj.individual_entities) ? obj.individual_entities.join(', ') : '-';
+                const sources = Array.isArray(obj.source_entities) ? obj.source_entities.join(', ') : '-';
+
+                const isActive = slowdownLinkSelection && slowdownLinkSelection.type === 'object' && slowdownLinkSelection.value === flowId;
+                const isRelated = linked.objectIds.has(flowId);
+                const classes = [];
+                if (isActive) classes.push('active');
+                else if (hasSelection && isRelated) classes.push('related');
+                else if (hasSelection) classes.push('muted');
+
+                objectsRoot.appendChild(
+                    createFlowItem(
+                        `<strong>${flowId}</strong> (${kind})<br>个体: ${members}<br>源头: ${sources}`,
+                        classes,
+                        () => toggleSlowdownLink('object', flowId)
+                    )
+                );
+            });
+            if (context.objects.length > MAX_OBJECT_RENDER) {
+                const tail = document.createElement('div');
+                tail.className = 'flow-empty';
+                tail.innerText = `其余 ${context.objects.length - MAX_OBJECT_RENDER} 项已折叠`;
+                objectsRoot.appendChild(tail);
+            }
+        }
+
+        const individualList = context.individualEntities.slice(0, MAX_ENTITY_RENDER);
+        if (individualList.length === 0) {
+            individualsRoot.innerHTML = '<div class="flow-empty">暂无个体</div>';
+        } else {
+            individualList.forEach((entity, idx) => {
+                const isActive = slowdownLinkSelection && slowdownLinkSelection.type === 'individual' && slowdownLinkSelection.value === entity;
+                const isRelated = linked.individuals.has(entity);
+                const classes = [];
+                if (isActive) classes.push('active');
+                else if (hasSelection && isRelated) classes.push('related');
+                else if (hasSelection) classes.push('muted');
+
+                individualsRoot.appendChild(
+                    createFlowItem(
+                        `<strong>${idx + 1}.</strong> ${entity}`,
+                        classes,
+                        () => toggleSlowdownLink('individual', entity)
+                    )
+                );
+            });
+            if (context.individualEntities.length > MAX_ENTITY_RENDER) {
+                const tail = document.createElement('div');
+                tail.className = 'flow-empty';
+                tail.innerText = `其余 ${context.individualEntities.length - MAX_ENTITY_RENDER} 项已折叠`;
+                individualsRoot.appendChild(tail);
+            }
+        }
+
+        const sourceList = context.sourceCards.slice(0, MAX_ENTITY_RENDER);
+        if (sourceList.length === 0) {
+            sourcesRoot.innerHTML = '<div class="flow-empty">暂无源头</div>';
+        } else {
+            sourceList.forEach((item, idx) => {
+                const sourceEntity = String(item.entity);
+                const isActive = slowdownLinkSelection && slowdownLinkSelection.type === 'source' && slowdownLinkSelection.value === sourceEntity;
+                const isRelated = linked.sources.has(sourceEntity);
+                const classes = [];
+                if (isActive) classes.push('active');
+                else if (hasSelection && isRelated) classes.push('related');
+                else if (hasSelection) classes.push('muted');
+
+                sourcesRoot.appendChild(
+                    createFlowItem(
+                        `<strong>${idx + 1}.</strong> ${sourceEntity}<br>类型: ${item.sourceType}`,
+                        classes,
+                        () => toggleSlowdownLink('source', sourceEntity)
+                    )
+                );
+            });
+            if (context.sourceCards.length > MAX_ENTITY_RENDER) {
+                const tail = document.createElement('div');
+                tail.className = 'flow-empty';
+                tail.innerText = `其余 ${context.sourceCards.length - MAX_ENTITY_RENDER} 项已折叠`;
+                sourcesRoot.appendChild(tail);
+            }
+        }
+
+        const focusEntities = hasSelection ? Array.from(linked.individuals) : [];
+        renderBevEntityOverlay(focusEntities);
+        updateFlowLinkHint(slowdownLinkSelection);
+    }
+
+    function renderSlowdownColumns(task) {
+        slowdownLinkContext = buildSlowdownLinkContext(task);
+        slowdownLinkSelection = null;
+        renderSlowdownColumnsFromContext();
+    }
+
+    async function fetchStates(options = {}) {
+        const refreshSettings = !!options.refreshSettings;
+
         const [rState, gState, pState] = await Promise.all([
             apiGet('/api/state'),
             apiGet('/api/governance/state'),
@@ -792,32 +1454,64 @@
         governanceState = gState;
         pipelineState = pState;
 
-        fillSettingsFields();
+        if (refreshSettings || settingsModalOpen) {
+            fillSettingsFields();
+        }
         fillPipelineFormDefaults();
         updateProgressAndMeta();
         updateUndoButton();
         updatePipelinePanel();
     }
 
+    function pushHistory(history, value) {
+        history.push(value);
+        if (history.length > HISTORY_LIMIT) {
+            history.splice(0, history.length - HISTORY_LIMIT);
+        }
+    }
+
+    function bindPipelineFormEvents() {
+        if (pipelineFormBound) return;
+        pipelineFormBound = true;
+
+        const fieldIds = [
+            'run-max-frames',
+            'run-model',
+            'run-data-dir',
+            'run-bev-dir',
+            'run-raw-dir',
+            'run-output-dir',
+            'run-use-llm',
+            'run-gen-report',
+        ];
+
+        fieldIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const eventName = (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input';
+            el.addEventListener(eventName, () => {
+                pipelineFormDirty = true;
+            });
+        });
+    }
+
     function fillPipelineFormDefaults() {
         if (!relationState) return;
         const cfg = relationState.config || {};
-        if (!document.getElementById('run-data-dir').value) {
-            document.getElementById('run-data-dir').value = cfg.pipeline_data_dir || cfg.sg_dir || '';
+        if (pipelineFormInitialized && pipelineFormDirty) {
+            return;
         }
-        if (!document.getElementById('run-bev-dir').value) {
-            document.getElementById('run-bev-dir').value = cfg.pipeline_bev_dir || cfg.schematic_dir || '';
-        }
-        if (!document.getElementById('run-raw-dir').value) {
-            document.getElementById('run-raw-dir').value = cfg.pipeline_raw_image_dir || cfg.img_dir || '';
-        }
-        if (!document.getElementById('run-output-dir').value) {
-            document.getElementById('run-output-dir').value = cfg.gov_outputs_dir || '';
-        }
+
+        document.getElementById('run-data-dir').value = cfg.pipeline_data_dir || cfg.sg_dir || '';
+        document.getElementById('run-bev-dir').value = cfg.pipeline_bev_dir || cfg.schematic_dir || '';
+        document.getElementById('run-raw-dir').value = cfg.pipeline_raw_image_dir || cfg.img_dir || '';
+        document.getElementById('run-output-dir').value = cfg.gov_outputs_dir || '';
         document.getElementById('run-max-frames').value = cfg.pipeline_max_frames || 20;
         document.getElementById('run-model').value = cfg.pipeline_model || 'qwen3-vl:4b';
         document.getElementById('run-use-llm').checked = !!cfg.pipeline_use_llm;
         document.getElementById('run-gen-report').checked = !!cfg.pipeline_generate_report;
+
+        pipelineFormInitialized = true;
     }
 
     function updatePipelinePanel() {
@@ -831,8 +1525,13 @@
         document.getElementById('runtime-output').innerText = pipelineState.last_run_path || '-';
         document.getElementById('runtime-error').innerText = pipelineState.error || '-';
 
-        const logs = (pipelineState.logs || []).join('\n');
-        document.getElementById('pipeline-logs').innerText = logs || '尚无日志';
+        const logsArr = pipelineState.logs || [];
+        const logSignature = `${logsArr.length}|${logsArr.length ? logsArr[logsArr.length - 1] : ''}`;
+        if (logSignature !== lastPipelineLogSignature) {
+            const logs = logsArr.join('\n');
+            document.getElementById('pipeline-logs').innerText = logs || '尚无日志';
+            lastPipelineLogSignature = logSignature;
+        }
 
         document.getElementById('btn-run-start').disabled = running;
         document.getElementById('btn-run-stop').disabled = !running;
@@ -853,13 +1552,19 @@
         hideDone();
         currentGovernanceIndex = data.index;
         const task = data.task;
+        currentFrameId = String(task.frame_id || '');
+        currentFocusEntities = [];
+        const slowdownLevel = String(task.slowdown_level || task.risk_level || 'low').toUpperCase();
+        const slowdownScore = task.slowdown_score ?? task.risk_score ?? 0;
+        const slowdownClass = task.slowdown_class_label || task.slowdown_class || 'unknown';
 
         setBanner(
             `Frame ${task.frame_id}`,
-            `risk ${String(task.risk_level || 'low').toUpperCase()}`,
-            `score ${task.risk_score || 0}`
+            `slowdown ${slowdownLevel}`,
+            `score ${slowdownScore} · ${slowdownClass}`
         );
         setImages(data.img_path, data.schematic_path);
+        setBevOverlayData(data.bev_overlay || null);
 
         const selectedRun = governanceState && governanceState.selected_run
             ? governanceState.selected_run.split(/[\\/]/).pop()
@@ -867,6 +1572,7 @@
         document.getElementById('run-name').innerText = `运行记录: ${selectedRun}`;
 
         renderCauseChips(task.dominant_causes || []);
+        renderSlowdownColumns(task);
         document.getElementById('governance-report').innerText = task.governance_report || '暂无治理报告';
 
         const llmText = (task.llm_insight || '').trim();
@@ -890,12 +1596,16 @@
 
         hideDone();
         currentRelationIndex = data.index;
+        currentFrameId = '';
+        currentFocusEntities = [];
         setBanner(
             `${data.task.subject || '-'} (${data.task.subject_type || '-'})`,
             data.task.relation || '-',
             `${data.task.object || '-'} (${data.task.object_type || '-'})`
         );
         setImages(data.img_path, data.schematic_path);
+        setBevOverlayData(null);
+        clearSlowdownColumns();
         document.getElementById('analysis-panel').classList.remove('show');
     }
 
@@ -907,26 +1617,29 @@
         } else {
             await loadRelationCard();
         }
-        await fetchStates();
+        updateUndoButton();
     }
 
     function switchMode(mode) {
         currentMode = mode;
         updateModeButtons();
-        loadCardByMode();
+        applyBevRenderMode(true);
+        fetchStates().then(() => loadCardByMode());
     }
 
     async function submitGovernance(status) {
         if (currentGovernanceIndex === -1) return;
-        governanceHistory.push(currentGovernanceIndex);
+        pushHistory(governanceHistory, currentGovernanceIndex);
         await apiPost('/api/governance/submit', { index: currentGovernanceIndex, status: status });
+        await fetchStates();
         await loadCardByMode();
     }
 
     async function submitRelation(status) {
         if (currentRelationIndex === -1) return;
-        relationHistory.push(currentRelationIndex);
+        pushHistory(relationHistory, currentRelationIndex);
         await apiPost('/api/submit', { index: currentRelationIndex, status: status });
+        await fetchStates();
         await loadCardByMode();
     }
 
@@ -964,12 +1677,13 @@
             const idx = relationHistory.pop();
             await apiPost('/api/submit', { index: idx, status: 'pending' });
         }
+        await fetchStates();
         await loadCardByMode();
     }
 
     async function rebuildGovernanceIndex() {
         await apiPost('/api/governance/rebuild', {});
-        await fetchStates();
+        await fetchStates({ refreshSettings: settingsModalOpen });
         if (currentMode === 'governance') {
             await loadGovernanceCard();
             updateProgressAndMeta();
@@ -1000,6 +1714,8 @@
                 output_dir: document.getElementById('run-output-dir').value
             };
             await apiPost('/api/pipeline/start', payload);
+            pipelineFormDirty = false;
+            idlePollCounter = 0;
             await fetchStates();
         } catch (err) {
             alert(`启动失败: ${err.message}`);
@@ -1047,10 +1763,13 @@
     }
 
     function openSettings() {
+        settingsModalOpen = true;
+        fillSettingsFields();
         document.getElementById('settings-modal').classList.add('active');
     }
 
     function closeSettings() {
+        settingsModalOpen = false;
         document.getElementById('settings-modal').classList.remove('active');
     }
 
@@ -1079,6 +1798,8 @@
         };
 
         await apiPost('/api/config', payload);
+        pipelineFormDirty = false;
+        pipelineFormInitialized = false;
         relationHistory = [];
         governanceHistory = [];
         closeSettings();
@@ -1087,33 +1808,43 @@
 
     function toggleZoom(idx, event) {
         const wrapper = event.currentTarget;
-        const img = wrapper.querySelector('img.preview');
+        const zoomLayers = wrapper.querySelectorAll('.zoom-layer');
         isZoomed[idx] = !isZoomed[idx];
 
         if (isZoomed[idx]) {
             wrapper.classList.add('zoomed');
-            img.style.transition = 'transform 0.15s ease';
-            img.style.transform = 'scale(3)';
+            zoomLayers.forEach(layer => {
+                layer.style.transition = 'transform 0.15s ease';
+                layer.style.transform = 'scale(3)';
+            });
             panZoom(idx, event);
             setTimeout(() => {
-                if (isZoomed[idx]) img.style.transition = 'none';
+                if (isZoomed[idx]) {
+                    zoomLayers.forEach(layer => {
+                        layer.style.transition = 'none';
+                    });
+                }
             }, 150);
         } else {
             wrapper.classList.remove('zoomed');
-            img.style.transition = 'transform 0.15s ease';
-            img.style.transform = 'scale(1)';
-            img.style.transformOrigin = 'center center';
+            zoomLayers.forEach(layer => {
+                layer.style.transition = 'transform 0.15s ease';
+                layer.style.transform = 'scale(1)';
+                layer.style.transformOrigin = 'center center';
+            });
         }
     }
 
     function panZoom(idx, event) {
         if (!isZoomed[idx]) return;
         const wrapper = event.currentTarget;
-        const img = wrapper.querySelector('img.preview');
+        const zoomLayers = wrapper.querySelectorAll('.zoom-layer');
         const rect = wrapper.getBoundingClientRect();
         const xPercent = ((event.clientX - rect.left) / rect.width) * 100;
         const yPercent = ((event.clientY - rect.top) / rect.height) * 100;
-        img.style.transformOrigin = `${xPercent}% ${yPercent}%`;
+        zoomLayers.forEach(layer => {
+            layer.style.transformOrigin = `${xPercent}% ${yPercent}%`;
+        });
     }
 
     function resetZoom(idx, event) {
@@ -1124,12 +1855,11 @@
         isZoomed = [false, false];
         document.querySelectorAll('.image-wrapper').forEach(wrapper => {
             wrapper.classList.remove('zoomed');
-            const img = wrapper.querySelector('img.preview');
-            if (img) {
-                img.style.transition = 'none';
-                img.style.transform = 'scale(1)';
-                img.style.transformOrigin = 'center center';
-            }
+            wrapper.querySelectorAll('.zoom-layer').forEach(layer => {
+                layer.style.transition = 'none';
+                layer.style.transform = 'scale(1)';
+                layer.style.transformOrigin = 'center center';
+            });
         });
     }
 
@@ -1141,8 +1871,16 @@
             try {
                 pipelineState = await apiGet('/api/pipeline/state');
                 updatePipelinePanel();
-                if (!pipelineState.running) {
-                    await fetchStates();
+
+                if (pipelineState.running) {
+                    idlePollCounter = 0;
+                    return;
+                }
+
+                idlePollCounter += 1;
+                if (idlePollCounter >= IDLE_STATE_REFRESH_EVERY) {
+                    idlePollCounter = 0;
+                    await fetchStates({ refreshSettings: settingsModalOpen });
                 }
             } catch (err) {
                 console.warn('pipeline poll failed', err);
@@ -1164,10 +1902,23 @@
     });
 
     window.onload = async () => {
-        await fetchStates();
+        bindPipelineFormEvents();
+        clearSlowdownColumns();
+        await fetchStates({ refreshSettings: false });
         updateModeButtons();
         setupPolling();
         await loadCardByMode();
+        updateBevRenderModeBadge();
+
+        const bevImg = document.getElementById('img-schematic');
+        bevImg.addEventListener('error', () => {
+            if (!dynamicBevEnabled) return;
+            dynamicBevEnabled = false;
+            const toggle = document.getElementById('toggle-dynamic-bev');
+            if (toggle) toggle.checked = false;
+            applyBevRenderMode(true);
+            alert('动态 BEV 渲染失败，已自动切回静态 BEV。请检查后端日志或 matplotlib 依赖。');
+        });
     };
 </script>
 </body>
