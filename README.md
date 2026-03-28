@@ -45,6 +45,66 @@ python app.py
 
 Open: http://127.0.0.1:5000
 
+## Docker
+
+Build image:
+
+```bash
+docker build -t traffic-governance-web:latest .
+```
+
+Run container:
+
+```bash
+docker run --rm -p 5000:5000 traffic-governance-web:latest
+```
+
+Run with compose:
+
+```bash
+docker compose up -d --build
+```
+
+Then open:
+
+- http://127.0.0.1:5000
+- http://127.0.0.1:5000/showcase
+
+Notes:
+
+- Container persists web config/index files through mounts in `docker-compose.yml`.
+- If datasets are outside the repository, add host path mounts in `docker-compose.yml` and set paths in the web settings page.
+
+## Linux Edge One-Click Deploy (No Docker)
+
+Snapshot `df2e518` has been pushed to GitHub branch `snapshot-df2e518`.
+
+On the edge Linux device:
+
+```bash
+git clone https://github.com/naginya233/temporal-graph-governance.git
+cd temporal-graph-governance
+bash scripts/deploy_df2e518_linux.sh --with-service --install-dir /opt/temporal-graph-governance
+```
+
+After deploy:
+
+- Web: `http://<edge-ip>:5000`
+- Showcase: `http://<edge-ip>:5000/showcase`
+
+Useful options:
+
+```bash
+# no systemd, manual run mode
+bash scripts/deploy_df2e518_linux.sh --install-dir /opt/temporal-graph-governance
+
+# skip unit tests for faster install
+bash scripts/deploy_df2e518_linux.sh --with-service --skip-tests
+
+# force clean reinstall
+bash scripts/deploy_df2e518_linux.sh --with-service --force-recreate
+```
+
 ## Notes
 
 - This package intentionally excludes local runtime outputs and machine-specific config files.
