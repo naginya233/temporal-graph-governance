@@ -1,51 +1,78 @@
-# 交通治理与审阅一体化包
+# Temporal Graph Governance
 
-本目录是可直接发布的快照包，整合了两套系统：
+中文 | English
+
+## 项目简介 (CN)
+
+Temporal Graph Governance 是一个面向车路协同场景的交通治理与可解释审阅项目。项目将场景图推理、缓行风险分析、可视化审阅与运行编排整合到同一工作流中，支持研究验证、策略迭代和工程落地。
+
+本仓库中的 github_upload_package 是用于发布和交付的集成包，包含核心分析系统与审阅控制台。
+
+## Project Overview (EN)
+
+Temporal Graph Governance is an integrated toolkit for traffic governance in V2X scenarios. It combines scene-graph reasoning, slowdown risk analysis, visual review, and run orchestration in one workflow for research, iteration, and deployment.
+
+The github_upload_package directory is the distributable bundle that contains both the analysis engine and the review console.
+
+---
+
+## 系统组成 (CN)
 
 1. traffic_agent_system
-	 基于场景图的交通治理分析流水线。
+   场景图交通治理流水线，负责事件分析、风险评估与报告产出。
 
 2. DairV2X_SceneGraph_Validator
-	 治理优先的 Web 审阅台，包含关系校对次模式。
+   治理审阅优先的 Web 控制台，支持运行管线、查看日志、审核结果与关系校对。
 
-本版本重点增强：
+## Components (EN)
 
-- 治理模式下支持动态 BEV 重渲染高亮。
-- 动态渲染与静态图并行管线，开关可控。
-- 地图元素风格统一（路口、车道、斑马线、停止线、安全岛、相机位）。
-- 目标框坐标由 lidar 转 world 后绘制，避免聚集到角落。
+1. traffic_agent_system
+   Core pipeline for scene-graph traffic governance, risk scoring, and report generation.
 
----
-
-## 一、目录结构
-
-- traffic_agent_system/
-	治理流水线主工程。
-
-- DairV2X_SceneGraph_Validator/
-	Web 端与后端 API，负责审阅、运行控制和可视化。
-
-- requirements.txt
-	根依赖入口，覆盖两套系统运行所需包。
-
-- Dockerfile
-- docker-compose.yml
-	容器化运行文件。
-
-- UPLOAD_GUIDE.md
-	GitHub 上传简版指引。
+2. DairV2X_SceneGraph_Validator
+   Governance-first web console for pipeline control, live logs, result review, and relation validation.
 
 ---
 
-## 二、环境要求
+## 核心能力 (CN)
 
-- Python 3.10 及以上（建议 3.10/3.11）
-- Windows 或 Linux
-- 可访问数据集目录（原图、BEV、标注、标定、地图元素）
+- 治理流程闭环：从 pipeline 运行到审阅反馈在同一页面完成。
+- 双模式审阅：治理审阅模式 + 关系校对模式。
+- 动态 BEV 可视化：按需重渲染高亮对象，支持静态/动态切换。
+- 地图元素叠加：路口、车道、斑马线、停止线、安全岛、相机位与目标框统一展示。
+- 坐标一致性：对象从 lidar 坐标转换到 world 坐标，提升叠加准确性。
 
-建议使用独立虚拟环境。
+## Core Capabilities (EN)
 
-Windows（PowerShell）示例：
+- End-to-end governance loop from pipeline execution to human review.
+- Dual review modes: governance review and relation validation.
+- Dynamic BEV rendering with on-demand highlighting and static/dynamic switch.
+- Unified map overlays: junctions, lanes, crosswalks, stop lines, islands, camera center, and object boxes.
+- Coordinate consistency via lidar-to-world transformation for robust alignment.
+
+---
+
+## 目录结构 (CN)
+
+- traffic_agent_system/: 治理流水线主工程。
+- DairV2X_SceneGraph_Validator/: Web 服务与可视化审阅前后端。
+- requirements.txt: 根依赖入口。
+- Dockerfile, docker-compose.yml: 容器化部署文件。
+- UPLOAD_GUIDE.md: 上传与发布说明。
+
+## Repository Layout (EN)
+
+- traffic_agent_system/: governance pipeline implementation.
+- DairV2X_SceneGraph_Validator/: web app and visualization backend/frontend.
+- requirements.txt: top-level dependency list.
+- Dockerfile, docker-compose.yml: container deployment files.
+- UPLOAD_GUIDE.md: upload and release notes.
+
+---
+
+## 快速开始 (CN)
+
+### 1) 安装依赖
 
 ```bash
 python -m venv .venv
@@ -54,249 +81,137 @@ python -m pip install -U pip
 python -m pip install -r requirements.txt
 ```
 
-如果虚拟环境内 pip 缺失，可先执行：
-
-```bash
-python -m ensurepip --upgrade
-python -m pip install -U pip
-```
-
----
-
-## 三、快速启动
-
-### 1) 启动 Web 审阅台
+### 2) 启动 Web 控制台
 
 ```bash
 cd DairV2X_SceneGraph_Validator
 python app.py
 ```
 
-默认地址：
+访问地址：http://127.0.0.1:5000
 
-- http://127.0.0.1:5000
-
-### 2) 启动治理流水线（命令行方式）
+### 3) 启动治理流水线
 
 ```bash
 cd traffic_agent_system
 python pipeline.py --max-frames 20 --no-llm
 ```
 
-也可以在 Web 页面内直接启动/停止流水线，并查看日志与状态。
+## Quick Start (EN)
+
+### 1) Install dependencies
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+```
+
+### 2) Start the web console
+
+```bash
+cd DairV2X_SceneGraph_Validator
+python app.py
+```
+
+Open: http://127.0.0.1:5000
+
+### 3) Run the governance pipeline
+
+```bash
+cd traffic_agent_system
+python pipeline.py --max-frames 20 --no-llm
+```
 
 ---
 
-## 四、Web 功能说明
+## 配置说明 (CN)
 
-### 1) 模式
+在 Web 设置页中配置以下路径：
 
-- 治理审阅模式（主模式）
-	查看原图、BEV、治理报告、主因标签，进行确认/存疑/跳过。
+- sg_dir: 场景图 JSON 目录
+- img_dir: 原始图像目录
+- schematic_dir: 静态 BEV 目录
+- gov_outputs_dir: 治理输出目录
+- traffic_system_dir: 流水线工程目录
+- pipeline_script: pipeline.py 路径
+- pipeline_python: 运行 pipeline 的 Python 解释器
 
-- 关系校对模式（次模式）
-	对关系样本进行 correct/incorrect/skip。
-
-### 2) 动态 BEV 高亮
-
-治理模式中提供开关：动态高亮 BEV。
-
-- 关闭时：使用静态 BEV 原图，不显示前端叠加高亮框。
-- 开启时：调用后端动态渲染接口，根据当前选中对象重绘 BEV。
-
-接口：
-
-- GET /api/governance/render_bev?frame_id=...&entities=a,b,c
-
-### 3) 车流对象联动
-
-在治理卡片中点击对象/个体/源头后，会更新当前聚焦实体集合。
-
-- 动态 BEV 开启：后端重渲染并返回高亮结果。
-- 动态 BEV 关闭：仅保留静态图展示。
-
----
-
-## 五、数据与路径约定
-
-请在 Web 设置中配置以下路径（支持绝对路径）：
-
-- sg_dir
-	Scene Graph JSON 目录。
-
-- img_dir
-	原图目录。
-
-- schematic_dir
-	静态 BEV 图目录。
-
-- gov_outputs_dir
-	治理输出目录（run_*.jsonl 及 summary）。
-
-- traffic_system_dir
-	traffic_agent_system 根目录。
-
-- pipeline_script
-	一般为 traffic_agent_system/pipeline.py。
-
-- pipeline_python
-	运行 pipeline 的 Python 可执行文件。
-
-动态渲染相关目录（默认从配置中推断，也可手动设置）：
+动态 BEV 相关输入目录：
 
 - label/virtuallidar
 - calib/virtuallidar_to_world
 - map_elements_results
 
-命名约定：
+## Configuration (EN)
 
-- 帧 ID：例如 001438
-- 标注文件：001438.json
-- 静态 BEV：001438_intersection.png
+Configure these paths in the web settings page:
 
----
+- sg_dir: scene graph JSON directory
+- img_dir: raw image directory
+- schematic_dir: static BEV directory
+- gov_outputs_dir: governance output directory
+- traffic_system_dir: pipeline project directory
+- pipeline_script: path to pipeline.py
+- pipeline_python: Python interpreter used by pipeline
 
-## 六、动态渲染设计说明
+Dynamic BEV requires:
 
-### 1) 并行管线
-
-- 静态管线
-	直接显示已有 BEV 图片。
-
-- 动态管线
-	后端读取地图元素、标注与标定，实时绘制并返回图像。
-
-### 2) 坐标处理
-
-对象框先在 lidar 坐标系下构建，再通过 virtuallidar_to_world 变换到 world 坐标。
-
-这样可与 map elements 在同一坐标系叠加，避免错位和聚集问题。
-
-### 3) 渲染内容
-
-动态管线绘制：
-
-- junction（含选中路口高亮）
-- lane（交叉口内）
-- crosswalk
-- stopline
-- island
-- camera center
-- object box + id
-
-PNG 路径使用 matplotlib；无 matplotlib 时自动回退为 SVG 路径。
+- label/virtuallidar
+- calib/virtuallidar_to_world
+- map_elements_results
 
 ---
 
-## 七、Docker 运行
+## 动态 BEV 机制 (CN)
 
-构建镜像：
+- 关闭动态开关：展示静态 BEV 图，不显示前端叠加框。
+- 开启动态开关：请求后端重渲染接口并返回高亮图。
+- 接口：GET /api/governance/render_bev?frame_id=...&entities=a,b,c
+- 无 matplotlib 时自动回退 SVG 渲染。
 
-```bash
-docker build -t traffic-governance-web:latest .
-```
+## Dynamic BEV Behavior (EN)
 
-直接运行：
-
-```bash
-docker run --rm -p 5000:5000 traffic-governance-web:latest
-```
-
-使用 compose：
-
-```bash
-docker compose up -d --build
-```
-
-访问：
-
-- http://127.0.0.1:5000
-- http://127.0.0.1:5000/showcase
-
-若数据目录在仓库外，请在 docker-compose.yml 中补充 host mount，并在页面设置中改路径。
+- Dynamic off: show static BEV image without frontend overlay boxes.
+- Dynamic on: call backend rendering API and return highlighted BEV output.
+- API: GET /api/governance/render_bev?frame_id=...&entities=a,b,c
+- SVG fallback is used when matplotlib is unavailable.
 
 ---
 
-## 八、Linux 边缘端一键部署（非 Docker）
+## 常见问题 (CN)
 
-仓库内提供部署脚本：
+1. 启动失败提示 No module named flask
+   请确认当前环境已安装 requirements.txt。
 
-```bash
-bash scripts/deploy_df2e518_linux.sh --with-service --install-dir /opt/temporal-graph-governance
-```
+2. 开启动态 BEV 后没有变化
+   请检查后端服务状态、frame 对应标注/标定是否存在、map_elements 路径是否正确。
 
-常用参数：
+3. 目标与地图错位
+   请检查标定文件与帧号是否匹配，确认使用了 virtuallidar_to_world。
 
-```bash
-bash scripts/deploy_df2e518_linux.sh --install-dir /opt/temporal-graph-governance
-bash scripts/deploy_df2e518_linux.sh --with-service --skip-tests
-bash scripts/deploy_df2e518_linux.sh --with-service --force-recreate
-```
+## FAQ (EN)
 
----
+1. No module named flask
+   Install dependencies from requirements.txt in the active environment.
 
-## 九、常见问题排查
+2. Dynamic BEV shows no change
+   Verify backend status, per-frame labels/calibration availability, and map_elements path.
 
-### 1) 启动 app.py 报错：No module named flask
-
-原因：当前 Python 环境未安装依赖。
-
-处理：
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-### 2) 动态 BEV 开关打开后无变化
-
-检查项：
-
-- 后端是否启动成功。
-- frame_id 是否存在对应标注与标定文件。
-- map_elements 目录是否可读。
-- 浏览器是否拿到 /api/governance/render_bev 返回内容。
-
-### 3) 对象位置明显错位
-
-检查项：
-
-- calib/virtuallidar_to_world 是否匹配当前帧。
-- 标注是否来自 virtuallidar 坐标系。
-- map_elements 与标注是否是同一批数据。
-
-### 4) matplotlib 安装困难
-
-系统会自动尝试 SVG 回退渲染；如需 PNG 路径，请补装 matplotlib。
+3. Object-map misalignment
+   Validate frame-calibration matching and ensure lidar-to-world transform is applied.
 
 ---
 
-## 十、快照打包与 GitHub 更新建议流程
+## 部署方式 (CN/EN)
 
-### 1) 生成快照压缩包
-
-```bash
-Compress-Archive -Path ./github_upload_package/* -DestinationPath ./github_upload_package_YYYYMMDD_HHMMSS.zip -Force
-```
-
-### 2) 提交并推送
-
-```bash
-git add .
-git commit -m "snapshot: update dynamic bev pipeline"
-git push origin <your-branch>
-```
-
-建议每次快照同步记录：
-
-- 分支名
-- 提交哈希
-- 关键改动点
-- 对应 zip 文件名
+- Local run: Python 直接运行 app.py 与 pipeline.py。
+- Docker: 使用 Dockerfile 或 docker-compose.yml 启动。
+- Edge Linux: 可使用 scripts/deploy_df2e518_linux.sh 一键部署。
 
 ---
 
-## 十一、说明
+## License / 许可
 
-- 本打包目录默认不包含大体量运行输出与机器私有配置。
-- 首次启动后请先在 Web 设置页面完成路径校准。
-- 若用于多人协作，建议固定 Python 版本和依赖版本，并保留一次可复现快照。
+如需对外发布，请根据你的组织规范补充许可证文件与第三方依赖声明。
