@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "generated_at": "2026-03-28 11:30:11",
+    "workflow": "risk_rating_workflow",
+    "review_mode": "none"
+  },
+  "run": {
+    "jsonl": "outputs_smoke\\run_20260328_113011.jsonl",
+    "summary_json": "outputs_smoke\\run_20260328_113011_summary.json",
+    "processed": 3,
+    "skipped": 0
+  },
+  "risk_distribution": {
+    "high": 0,
+    "medium": 0,
+    "low": 3
+  },
+  "overall_rating": {
+    "grade": "C",
+    "label": "低风险",
+    "score_0_100": 33.33,
+    "high_rate": 0.0,
+    "medium_rate": 0.0
+  },
+  "event_segment_count": 0,
+  "event_segments": [],
+  "top_risk_frames": [
+    {
+      "frame_id": "000000",
+      "risk_level": "low",
+      "risk_score": 0,
+      "fast_decision": "【快速决策】维持当前轻量化监控。",
+      "dominant_causes": [],
+      "assets": {
+        "scene_graph_json": "d:\\Research\\Project2\\infrastructure\\data\\infrastructure-side\\scene_graph_results\\000000_scene_graph.json",
+        "bev_image": "d:\\Research\\Project2\\infrastructure\\data\\infrastructure-side\\intersection_vis_results\\000000_intersection.png",
+        "raw_image": "d:\\Research\\Project2\\dairv2xspd\\dairv2xspd\\frames\\000000.jpg",
+        "availability": {
+          "scene_graph_json": true,
+          "bev_image": true,
+          "raw_image": true
+        },
+        "is_complete": true
+      }
+    },
+    {
+      "frame_id": "000001",
+      "risk_level": "low",
+      "risk_score": 0,
+      "fast_decision": "【快速决策】维持当前轻量化监控。",
+      "dominant_causes": [],
+      "assets": {
+        "scene_graph_json": "d:\\Research\\Project2\\infrastructure\\data\\infrastructure-side\\scene_graph_results\\000001_scene_graph.json",
+        "bev_image": "d:\\Research\\Project2\\infrastructure\\data\\infrastructure-side\\intersection_vis_results\\000001_intersection.png",
+        "raw_image": "d:\\Research\\Project2\\dairv2xspd\\dairv2xspd\\frames\\000001.jpg",
+        "availability": {
+          "scene_graph_json": true,
+          "bev_image": true,
+          "raw_image": true
+        },
+        "is_complete": true
+      }
+    },
+    {
+      "frame_id": "000002",
+      "risk_level": "low",
+      "risk_score": 0,
+      "fast_decision": "【快速决策】维持当前轻量化监控。",
+      "dominant_causes": [],
+      "assets": {
+        "scene_graph_json": "d:\\Research\\Project2\\infrastructure\\data\\infrastructure-side\\scene_graph_results\\000002_scene_graph.json",
+        "bev_image": "d:\\Research\\Project2\\infrastructure\\data\\infrastructure-side\\intersection_vis_results\\000002_intersection.png",
+        "raw_image": "d:\\Research\\Project2\\dairv2xspd\\dairv2xspd\\frames\\000002.jpg",
+        "availability": {
+          "scene_graph_json": true,
+          "bev_image": true,
+          "raw_image": true
+        },
+        "is_complete": true
+      }
+    }
+  ],
+  "recommendations": [
+    "当前风险总体可控，建议保持轻量化监控与周期性巡检。",
+    "建议保留自动化评分流程，作为后续数据扩展时的基线。"
+  ]
+}

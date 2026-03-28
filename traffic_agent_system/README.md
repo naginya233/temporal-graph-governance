@@ -60,6 +60,18 @@ Enable local Ollama model:
 python pipeline.py --max-frames 20 --model qwen3-vl:4b
 ```
 
+Large-scale direct run without manual review:
+
+```bash
+python pipeline.py --max-frames 200 --no-review-mode --no-llm
+```
+
+Disable auto human-friendly rating report (structured output only):
+
+```bash
+python pipeline.py --max-frames 200 --no-review-mode --no-auto-human-report
+```
+
 ## Output
 
 Each run writes a JSONL file into `outputs/`:
@@ -73,6 +85,11 @@ Additional files are generated per run:
 - `run_*_summary.json`: global summary + temporal event segments
 - `run_*_summary.md`: concise markdown summary
 - `run_*_review.html`: visual review page with links/thumbnails
+- `run_*_risk_rating_structured.json`: structured risk-rating payload for downstream workflow
+- `run_*_risk_rating_report.md`: human-friendly intersection risk rating report
+- `run_*_risk_rating_report.html`: browser-ready human-friendly rating report
+
+When `--no-review-mode` is enabled, the run is marked as direct delivery (`review_mode=none`) and can skip manual review while still producing structured and human-friendly reports.
 
 ## Test
 

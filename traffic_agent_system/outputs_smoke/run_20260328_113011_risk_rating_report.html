@@ -1,0 +1,52 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>交叉口风险评级报告</title>
+  <style>
+    body { margin: 0; padding: 24px; font-family: "Segoe UI", "Noto Sans SC", "Microsoft YaHei", sans-serif; background: #f3f6fb; color: #0f172a; }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    .panel { background: #fff; border: 1px solid #d8e0ec; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: 10px; }
+    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; }
+    .label { color: #64748b; font-size: 12px; font-weight: 700; }
+    .value { margin-top: 4px; font-size: 24px; font-weight: 800; color: #0f766e; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #e2e8f0; text-align: left; padding: 8px; font-size: 13px; vertical-align: top; }
+    th { background: #eef2ff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h1>交叉口风险评级报告</h1>
+      <p>模式: none</p>
+      <div class="cards">
+        <div class="card"><div class="label">综合等级</div><div class="value">C</div></div>
+        <div class="card"><div class="label">综合得分</div><div class="value">33.33</div></div>
+        <div class="card"><div class="label">高风险帧</div><div class="value">0</div></div>
+        <div class="card"><div class="label">事件段</div><div class="value">0</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>治理建议</h2>
+      <ul><li>当前风险总体可控，建议保持轻量化监控与周期性巡检。</li><li>建议保留自动化评分流程，作为后续数据扩展时的基线。</li></ul>
+    </div>
+
+    <div class="panel">
+      <h2>重点风险帧</h2>
+      <table>
+        <thead>
+          <tr><th>Frame</th><th>Level</th><th>Score</th><th>Dominant Causes</th><th>Fast Decision</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>000000</td><td>low</td><td>0</td><td></td><td>【快速决策】维持当前轻量化监控。</td></tr><tr><td>000001</td><td>low</td><td>0</td><td></td><td>【快速决策】维持当前轻量化监控。</td></tr><tr><td>000002</td><td>low</td><td>0</td><td></td><td>【快速决策】维持当前轻量化监控。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

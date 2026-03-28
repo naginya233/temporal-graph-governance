@@ -407,6 +407,398 @@
             overflow: auto;
         }
 
+        .demo-panel {
+            display: none;
+        }
+
+        .demo-panel.show {
+            display: block;
+        }
+
+        .demo-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .demo-head h2 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .demo-head p {
+            margin: 4px 0 0 0;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .demo-grid {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(130px, 1fr));
+            gap: 10px;
+        }
+
+        .demo-stat {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 10px;
+            background: #f8fafc;
+        }
+
+        .demo-stat .k {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .demo-stat .v {
+            margin-top: 4px;
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        .demo-columns {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: 0.95fr 1.35fr;
+            gap: 10px;
+        }
+
+        .demo-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .demo-box {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 12px;
+            background: #fff;
+        }
+
+        .demo-box h3 {
+            margin: 0 0 8px 0;
+            font-size: 17px;
+        }
+
+        .demo-events {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 420px;
+            overflow: auto;
+        }
+
+        .demo-event {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 8px;
+            background: #f8fafc;
+            cursor: pointer;
+            transition: border-color 0.15s ease, background-color 0.15s ease;
+        }
+
+        .demo-event:hover {
+            border-color: #8ab7b2;
+            background: #f0fdfa;
+        }
+
+        .demo-event.active {
+            border-color: #0f766e;
+            background: #ecfdf5;
+        }
+
+        .demo-event-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+            flex-wrap: wrap;
+        }
+
+        .demo-event-title {
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .demo-event p {
+            margin: 4px 0;
+            font-size: 12px;
+            line-height: 1.35;
+            color: var(--ink);
+        }
+
+        .demo-event p.muted {
+            color: var(--muted);
+        }
+
+        .risk-pill {
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 800;
+            border: 1px solid transparent;
+        }
+
+        .risk-pill.high {
+            background: #fef2f2;
+            color: #b91c1c;
+            border-color: #fecaca;
+        }
+
+        .risk-pill.medium {
+            background: #fff7ed;
+            color: #b45309;
+            border-color: #fed7aa;
+        }
+
+        .risk-pill.low {
+            background: #ecfdf5;
+            color: #15803d;
+            border-color: #bbf7d0;
+        }
+
+        .demo-step-list {
+            margin: 0;
+            padding-left: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .demo-step-list li {
+            font-size: 14px;
+            line-height: 1.35;
+        }
+
+        .demo-step-list li strong {
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .demo-detail-title {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .demo-detail-meta {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .demo-image-row {
+            margin-top: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .demo-image-card {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 6px;
+            background: #f8fafc;
+        }
+
+        .demo-image-label {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .demo-image {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            min-height: 210px;
+            object-fit: contain;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #e2e8f0;
+            cursor: zoom-in;
+        }
+
+        .demo-relations {
+            margin-top: 10px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 8px;
+            background: #fff;
+        }
+
+        .demo-relations-title {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+            margin-bottom: 6px;
+        }
+
+        .relation-list {
+            margin: 0;
+            padding-left: 18px;
+            max-height: 220px;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .relation-list li {
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        .relation-item {
+            cursor: pointer;
+            border-radius: 8px;
+            padding: 3px 6px;
+            transition: background-color 0.15s ease, color 0.15s ease;
+        }
+
+        .relation-item:hover {
+            background: #ecfdf5;
+        }
+
+        .relation-item.active {
+            background: #0f766e;
+            color: #ffffff;
+        }
+
+        .demo-highlight-tip {
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .demo-report {
+            margin-top: 8px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 10px;
+            font-size: 13px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            font-family: Consolas, "Courier New", monospace;
+            background: #f8fafc;
+            max-height: 280px;
+            overflow: auto;
+        }
+
+        .report-highlight {
+            background: #fde68a;
+            color: #111827;
+            border-radius: 4px;
+            padding: 0 2px;
+            font-weight: 700;
+        }
+
+        .demo-trace {
+            margin-top: 10px;
+            border-top: 1px dashed var(--line);
+            padding-top: 8px;
+        }
+
+        .demo-trace-title {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+            margin-bottom: 6px;
+        }
+
+        .trace-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .trace-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: #fff;
+            color: #0f172a;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .trace-link:hover {
+            border-color: #8ab7b2;
+            background: #f0fdfa;
+        }
+
+        .image-lightbox {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            background: rgba(15, 23, 42, 0.86);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+            padding: 20px;
+        }
+
+        .image-lightbox.show {
+            display: flex;
+        }
+
+        .image-lightbox img {
+            max-width: min(1400px, 96vw);
+            max-height: 82vh;
+            object-fit: contain;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: #0b1220;
+        }
+
+        .image-lightbox .caption {
+            color: #e2e8f0;
+            font-size: 13px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .demo-rec-title {
+            margin-top: 12px;
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--muted);
+        }
+
+        .demo-rec-list {
+            margin: 6px 0 0 0;
+            padding-left: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .demo-empty {
+            border: 1px dashed var(--line);
+            border-radius: 10px;
+            padding: 10px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+        }
+
         .action-bar {
             display: flex;
             justify-content: center;
@@ -507,6 +899,10 @@
             .pipeline-form { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
             .workspace { grid-template-columns: 1fr; }
             .meta-row { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+            .demo-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+            .demo-columns { grid-template-columns: 1fr; }
+            .demo-image-row { grid-template-columns: 1fr; }
+            .demo-image { min-height: 180px; }
             header { padding: 12px 12px; }
             main { padding: 12px; }
         }
@@ -519,6 +915,7 @@
         <div class="mode-switch">
             <button id="mode-governance" class="mode-btn active" onclick="switchMode('governance')">治理主功能</button>
             <button id="mode-relation" class="mode-btn" onclick="switchMode('relation')">关系校对次功能</button>
+            <button id="mode-demo" class="mode-btn" onclick="switchMode('demo')">演示模块</button>
         </div>
     </div>
     <div class="header-right">
@@ -567,6 +964,8 @@
                 <div class="check-row">
                     <label class="check"><input id="run-use-llm" type="checkbox" checked> 启用 LLM</label>
                     <label class="check"><input id="run-gen-report" type="checkbox" checked> 生成报告</label>
+                    <label class="check"><input id="run-no-review" type="checkbox"> 无审阅模式</label>
+                    <label class="check"><input id="run-auto-human-report" type="checkbox" checked> 自动生成人类友好评级报告</label>
                 </div>
                 <div class="pipeline-actions">
                     <button class="btn primary" id="btn-run-start" onclick="startPipelineRun()">启动治理运行</button>
@@ -623,6 +1022,67 @@
         <pre id="governance-llm" style="display:none;"></pre>
     </div>
 
+    <div class="panel demo-panel" id="demo-panel">
+        <div class="demo-head">
+            <div>
+                <h2>危险事件演示</h2>
+                <p id="demo-subtitle">基于当前审阅运行结果，自动提炼重点风险与推导链路。</p>
+            </div>
+            <span class="risk-pill low" id="demo-review-mode">模式: manual</span>
+        </div>
+
+        <div class="demo-grid">
+            <div class="demo-stat"><div class="k">总体评级</div><div class="v" id="demo-grade">-</div></div>
+            <div class="demo-stat"><div class="k">综合得分</div><div class="v" id="demo-score">-</div></div>
+            <div class="demo-stat"><div class="k">高风险帧</div><div class="v" id="demo-high">-</div></div>
+            <div class="demo-stat"><div class="k">事件段</div><div class="v" id="demo-segments">-</div></div>
+        </div>
+
+        <div class="demo-columns">
+            <div class="demo-box">
+                <h3>重点危险事件 (Top 6)</h3>
+                <div id="demo-events" class="demo-events"></div>
+            </div>
+            <div class="demo-stack">
+                <div class="demo-box">
+                    <h3>事件级推导与可溯源证据</h3>
+                    <h4 id="demo-event-title" class="demo-detail-title">请选择左侧事件</h4>
+                    <div id="demo-event-meta" class="demo-detail-meta">-</div>
+
+                    <div class="demo-image-row">
+                        <div class="demo-image-card">
+                            <div class="demo-image-label">事件原图</div>
+                            <img id="demo-event-raw" class="demo-image" src="" alt="无原图" onerror="this.alt='无法加载原图'">
+                        </div>
+                        <div class="demo-image-card">
+                            <div class="demo-image-label">事件场景图 (BEV)</div>
+                            <img id="demo-event-bev" class="demo-image" src="" alt="无场景图" onerror="this.alt='无法加载场景图'">
+                        </div>
+                    </div>
+
+                    <div class="demo-relations">
+                        <div id="demo-relations-title" class="demo-relations-title">关键主客体关系</div>
+                        <ol id="demo-relations" class="relation-list"></ol>
+                        <div id="demo-highlight-tip" class="demo-highlight-tip">点击关系条目可高亮下方报告中的主客体与关系词。</div>
+                    </div>
+
+                    <ol id="demo-event-steps" class="demo-step-list"></ol>
+                    <pre id="demo-event-report" class="demo-report">点击左侧事件后，这里显示完整治理报告。</pre>
+                    <div class="demo-trace">
+                        <div class="demo-trace-title" id="demo-trace-title">溯源链接</div>
+                        <div id="demo-trace-links" class="trace-links"></div>
+                    </div>
+                </div>
+                <div class="demo-box">
+                    <h3>系统总体推导链路</h3>
+                    <ol id="demo-steps" class="demo-step-list"></ol>
+                    <div class="demo-rec-title">治理建议</div>
+                    <ul id="demo-recommendations" class="demo-rec-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="action-bar" id="action-bar">
         <button class="btn soft" id="btn-undo" onclick="undoMark()" disabled>上一张<span class="shortcut">(B)</span></button>
         <button class="btn warn" id="btn-negative" onclick="handleNegative()">风险存疑<span class="shortcut">(N)</span></button>
@@ -657,11 +1117,21 @@
     </div>
 </div>
 
+<div id="image-lightbox" class="image-lightbox" onclick="closeImageLightbox(event)">
+    <img id="lightbox-image" src="" alt="放大图像">
+    <div id="lightbox-caption" class="caption"></div>
+</div>
+
 <script>
     let currentMode = 'governance';
     let relationState = null;
     let governanceState = null;
+    let demoState = null;
     let pipelineState = null;
+    let selectedDemoEventIndex = 0;
+    let selectedDemoRelationIndex = -1;
+    let activeDemoEvent = null;
+    let activeDemoReportText = '';
     let currentRelationIndex = -1;
     let currentGovernanceIndex = -1;
     let relationHistory = [];
@@ -669,6 +1139,8 @@
     let isZoomed = [false, false];
     let pipelinePolling = null;
     let lastPipelineRunning = false;
+    let pipelineFormDirty = false;
+    let settingsFormDirty = false;
 
     async function apiGet(url) {
         const res = await fetch(url);
@@ -691,6 +1163,7 @@
     function updateModeButtons() {
         document.getElementById('mode-governance').classList.toggle('active', currentMode === 'governance');
         document.getElementById('mode-relation').classList.toggle('active', currentMode === 'relation');
+        document.getElementById('mode-demo').classList.toggle('active', currentMode === 'demo');
     }
 
     function updateProgressAndMeta() {
@@ -704,7 +1177,7 @@
             document.getElementById('meta-assessed').innerText = assessed;
             document.getElementById('meta-pending').innerText = pending;
             document.getElementById('meta-segments').innerText = seg;
-        } else {
+        } else if (currentMode === 'relation') {
             const total = relationState ? relationState.total : 0;
             const assessed = relationState ? relationState.assessed : 0;
             const pending = relationState ? relationState.pending : 0;
@@ -714,11 +1187,23 @@
             document.getElementById('meta-assessed').innerText = assessed;
             document.getElementById('meta-pending').innerText = pending;
             document.getElementById('meta-segments').innerText = seg;
+        } else {
+            const gTotal = governanceState ? governanceState.total : 0;
+            const gAssessed = governanceState ? governanceState.assessed : 0;
+            const gPending = governanceState ? governanceState.pending : 0;
+            const seg = governanceState ? (governanceState.event_segments || []).length : 0;
+            document.getElementById('progress-text').innerText = `演示模块: 聚焦重点危险事件 (${gTotal} 帧)`;
+            document.getElementById('meta-total').innerText = gTotal;
+            document.getElementById('meta-assessed').innerText = gAssessed;
+            document.getElementById('meta-pending').innerText = gPending;
+            document.getElementById('meta-segments').innerText = seg;
         }
     }
 
     function updateUndoButton() {
-        const canUndo = currentMode === 'governance' ? governanceHistory.length > 0 : relationHistory.length > 0;
+        const canUndo = currentMode === 'governance'
+            ? governanceHistory.length > 0
+            : (currentMode === 'relation' ? relationHistory.length > 0 : false);
         document.getElementById('btn-undo').disabled = !canUndo;
     }
 
@@ -727,16 +1212,33 @@
         const pos = document.getElementById('btn-positive');
         const panel = document.getElementById('analysis-panel');
         const pipelinePanel = document.getElementById('pipeline-panel');
+        const demoPanel = document.getElementById('demo-panel');
+        const workspace = document.getElementById('workspace');
+        const actionBar = document.getElementById('action-bar');
 
         if (currentMode === 'governance') {
             neg.innerHTML = '风险存疑<span class="shortcut">(N)</span>';
             pos.innerHTML = '确认风险<span class="shortcut">(Y)</span>';
             panel.classList.add('show');
+            demoPanel.classList.remove('show');
+            workspace.style.display = 'grid';
+            actionBar.style.display = 'flex';
             pipelinePanel.style.display = 'block';
-        } else {
+        } else if (currentMode === 'relation') {
             neg.innerHTML = '错误<span class="shortcut">(N)</span>';
             pos.innerHTML = '正确<span class="shortcut">(Y)</span>';
             panel.classList.remove('show');
+            demoPanel.classList.remove('show');
+            workspace.style.display = 'grid';
+            actionBar.style.display = 'flex';
+            pipelinePanel.style.display = 'none';
+        } else {
+            neg.innerHTML = '风险存疑<span class="shortcut">(N)</span>';
+            pos.innerHTML = '确认风险<span class="shortcut">(Y)</span>';
+            panel.classList.remove('show');
+            demoPanel.classList.add('show');
+            workspace.style.display = 'none';
+            actionBar.style.display = 'none';
             pipelinePanel.style.display = 'none';
         }
     }
@@ -782,6 +1284,341 @@
         });
     }
 
+    function riskPillClass(level) {
+        const text = String(level || 'low').toLowerCase();
+        if (text === 'high') return 'high';
+        if (text === 'medium') return 'medium';
+        return 'low';
+    }
+
+    function escapeHtml(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function escapeRegExp(text) {
+        return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function openImageLightbox(src, caption) {
+        if (!src) return;
+        const box = document.getElementById('image-lightbox');
+        document.getElementById('lightbox-image').src = src;
+        document.getElementById('lightbox-caption').innerText = caption || '';
+        box.classList.add('show');
+    }
+
+    function closeImageLightbox(event) {
+        if (event && event.target && event.target.id === 'lightbox-image') return;
+        const box = document.getElementById('image-lightbox');
+        document.getElementById('lightbox-image').src = '';
+        document.getElementById('lightbox-caption').innerText = '';
+        box.classList.remove('show');
+    }
+
+    function renderDemoReport(reportText, relationItem) {
+        const box = document.getElementById('demo-event-report');
+        const raw = String(reportText || '暂无可展示报告');
+        if (!relationItem) {
+            box.innerText = raw;
+            return;
+        }
+
+        const keys = [relationItem.subject, relationItem.relation, relationItem.object]
+            .map(v => String(v || '').trim())
+            .filter(Boolean)
+            .sort((a, b) => b.length - a.length);
+
+        let html = escapeHtml(raw);
+        keys.forEach(k => {
+            const re = new RegExp(escapeRegExp(escapeHtml(k)), 'gi');
+            html = html.replace(re, '<span class="report-highlight">$&</span>');
+        });
+        box.innerHTML = html;
+    }
+
+    function updateRelationHighlightState() {
+        document.querySelectorAll('#demo-relations .relation-item').forEach((el, idx) => {
+            el.classList.toggle('active', idx === selectedDemoRelationIndex);
+        });
+    }
+
+    function toggleDemoRelationHighlight(index) {
+        if (!activeDemoEvent) return;
+        const rels = activeDemoEvent.key_relations || [];
+        if (index < 0 || index >= rels.length) return;
+
+        const tip = document.getElementById('demo-highlight-tip');
+        if (selectedDemoRelationIndex === index) {
+            selectedDemoRelationIndex = -1;
+            updateRelationHighlightState();
+            renderDemoReport(activeDemoReportText, null);
+            tip.innerText = '点击关系条目可高亮下方报告中的主客体与关系词。';
+            return;
+        }
+
+        selectedDemoRelationIndex = index;
+        updateRelationHighlightState();
+        const rel = rels[index];
+        renderDemoReport(activeDemoReportText, rel);
+        tip.innerText = `已高亮: ${rel.subject || '-'} --${rel.relation || '-'}--> ${rel.object || '-'} (再次点击可取消)`;
+    }
+
+    function renderDemoEvents(events) {
+        const wrap = document.getElementById('demo-events');
+        wrap.innerHTML = '';
+        if (!events || events.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'demo-empty';
+            empty.innerText = '暂无可展示的危险事件，请先运行治理流程。';
+            wrap.appendChild(empty);
+            return;
+        }
+
+        events.forEach((item, idx) => {
+            const eventCard = document.createElement('div');
+            eventCard.className = 'demo-event';
+            if (idx === selectedDemoEventIndex) {
+                eventCard.classList.add('active');
+            }
+            eventCard.onclick = () => selectDemoEvent(idx);
+
+            const top = document.createElement('div');
+            top.className = 'demo-event-top';
+
+            const title = document.createElement('div');
+            title.className = 'demo-event-title';
+            title.innerText = `#${idx + 1} Frame ${item.frame_id || '-'} | score ${item.risk_score || 0}`;
+
+            const tag = document.createElement('span');
+            const riskLevel = String(item.risk_level || 'low').toLowerCase();
+            tag.className = `risk-pill ${riskPillClass(riskLevel)}`;
+            tag.innerText = riskLevel.toUpperCase();
+
+            top.appendChild(title);
+            top.appendChild(tag);
+
+            const causes = document.createElement('p');
+            causes.className = 'muted';
+            const causeList = (item.dominant_causes || []).join(', ') || 'no-dominant-cause';
+            causes.innerText = `主因: ${causeList}`;
+
+            const decision = document.createElement('p');
+            decision.innerText = `快速决策: ${item.fast_decision || '暂无'}`;
+
+            const report = document.createElement('p');
+            const reportText = String(item.governance_report || '').replace(/\s+/g, ' ').trim();
+            report.className = 'muted';
+            report.innerText = `证据摘要: ${reportText ? reportText.slice(0, 120) : '暂无'}${reportText.length > 120 ? '...' : ''}`;
+
+            eventCard.appendChild(top);
+            eventCard.appendChild(causes);
+            eventCard.appendChild(decision);
+            eventCard.appendChild(report);
+            wrap.appendChild(eventCard);
+        });
+    }
+
+    function renderDemoEventDetail(eventItem) {
+        if (!eventItem) {
+            activeDemoEvent = null;
+            selectedDemoRelationIndex = -1;
+            activeDemoReportText = '';
+            document.getElementById('demo-event-title').innerText = '请选择左侧事件';
+            document.getElementById('demo-event-meta').innerText = '-';
+            document.getElementById('demo-event-raw').src = '';
+            document.getElementById('demo-event-bev').src = '';
+            document.getElementById('demo-relations-title').innerText = '关键主客体关系';
+            document.getElementById('demo-relations').innerHTML = '';
+            document.getElementById('demo-highlight-tip').innerText = '点击关系条目可高亮下方报告中的主客体与关系词。';
+            document.getElementById('demo-event-steps').innerHTML = '';
+            document.getElementById('demo-event-report').innerText = '点击左侧事件后，这里显示完整治理报告。';
+            document.getElementById('demo-trace-title').innerText = '溯源链接';
+            document.getElementById('demo-trace-links').innerHTML = '';
+            return;
+        }
+
+        activeDemoEvent = eventItem;
+        selectedDemoRelationIndex = -1;
+
+        const frameId = eventItem.frame_id || '-';
+        const score = eventItem.risk_score || 0;
+        const level = String(eventItem.risk_level || 'low').toUpperCase();
+        const status = eventItem.status || 'pending';
+
+        document.getElementById('demo-event-title').innerText = `Frame ${frameId} | ${level} | score ${score}`;
+        document.getElementById('demo-event-meta').innerText = `审阅状态: ${status} | JSONL 行号: ${eventItem.line_no || '-'} | 主因: ${((eventItem.dominant_causes || []).join(', ') || 'none')}`;
+
+        const trace = eventItem.trace || {};
+        const stamp = Date.now();
+        const rawImage = trace.raw_image ? `/api/image?path=${encodeURIComponent(trace.raw_image)}&t=${stamp}` : '';
+        const bevImage = trace.bev_image ? `/api/image?path=${encodeURIComponent(trace.bev_image)}&t=${stamp}` : '';
+        const rawEl = document.getElementById('demo-event-raw');
+        const bevEl = document.getElementById('demo-event-bev');
+        rawEl.src = rawImage;
+        bevEl.src = bevImage;
+        rawEl.onclick = rawImage ? () => openImageLightbox(rawImage, `Frame ${frameId} 原图`) : null;
+        bevEl.onclick = bevImage ? () => openImageLightbox(bevImage, `Frame ${frameId} 场景图 (BEV)`) : null;
+
+        const relTitle = document.getElementById('demo-relations-title');
+        const relWrap = document.getElementById('demo-relations');
+        relWrap.innerHTML = '';
+        const keyRelations = eventItem.key_relations || [];
+        const sgStats = eventItem.scene_graph_stats || {};
+        relTitle.innerText = `关键主客体关系 (object-object=${sgStats.object_object_total || 0}, object-map=${sgStats.object_map_total || 0})`;
+
+        if (!keyRelations.length) {
+            const li = document.createElement('li');
+            li.innerText = '未提取到关键关系，可能该帧关系缺失或数据不可用。';
+            relWrap.appendChild(li);
+        } else {
+            keyRelations.forEach((item, idx) => {
+                const li = document.createElement('li');
+                li.className = 'relation-item';
+                li.innerText = `${item.subject || '-'}(${item.subject_type || '-'}) --${item.relation || '-'}--> ${item.object || '-'}(${item.object_type || '-'}) [evidence: ${item.evidence || '-'}]`;
+                li.onclick = () => toggleDemoRelationHighlight(idx);
+                relWrap.appendChild(li);
+            });
+        }
+        updateRelationHighlightState();
+        document.getElementById('demo-highlight-tip').innerText = '点击关系条目可高亮下方报告中的主客体与关系词。';
+
+        const stepWrap = document.getElementById('demo-event-steps');
+        stepWrap.innerHTML = '';
+        const eventSteps = eventItem.reasoning_steps || [];
+        eventSteps.forEach(item => {
+            const li = document.createElement('li');
+            const title = document.createElement('strong');
+            title.innerText = item.title || '步骤';
+            const detail = document.createElement('span');
+            detail.innerText = item.detail || '';
+            li.appendChild(title);
+            li.appendChild(detail);
+            stepWrap.appendChild(li);
+        });
+
+        const reportParts = [];
+        if (eventItem.governance_report) {
+            reportParts.push(String(eventItem.governance_report));
+        }
+        if (eventItem.llm_insight) {
+            reportParts.push(`\n[LLM 补充]\n${String(eventItem.llm_insight)}`);
+        }
+        if (reportParts.length === 0) {
+            reportParts.push('暂无可展示报告');
+        }
+        activeDemoReportText = reportParts.join('\n\n');
+        renderDemoReport(activeDemoReportText, null);
+
+        document.getElementById('demo-trace-title').innerText = `溯源链接 (run: ${trace.jsonl_file ? String(trace.jsonl_file).split(/[\\/]/).pop() : '-'})`;
+
+        const traceWrap = document.getElementById('demo-trace-links');
+        traceWrap.innerHTML = '';
+        const links = eventItem.trace_links || [];
+        if (!links.length) {
+            const muted = document.createElement('span');
+            muted.className = 'demo-detail-meta';
+            muted.innerText = '暂无可用溯源链接';
+            traceWrap.appendChild(muted);
+        } else {
+            links.forEach(link => {
+                const a = document.createElement('a');
+                a.className = 'trace-link';
+                a.href = link.url || '#';
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.innerText = link.label || 'source';
+                traceWrap.appendChild(a);
+            });
+        }
+    }
+
+    function selectDemoEvent(index) {
+        const events = (demoState && demoState.top_events) || [];
+        if (!events.length) {
+            selectedDemoEventIndex = 0;
+            renderDemoEvents(events);
+            renderDemoEventDetail(null);
+            return;
+        }
+
+        const safeIndex = Math.max(0, Math.min(index, events.length - 1));
+        selectedDemoEventIndex = safeIndex;
+        renderDemoEvents(events);
+        renderDemoEventDetail(events[safeIndex]);
+    }
+
+    function renderDemoSteps(steps) {
+        const wrap = document.getElementById('demo-steps');
+        wrap.innerHTML = '';
+        (steps || []).forEach(item => {
+            const li = document.createElement('li');
+            const title = document.createElement('strong');
+            title.innerText = item.title || '步骤';
+            const detail = document.createElement('span');
+            detail.innerText = item.detail || '';
+            li.appendChild(title);
+            li.appendChild(detail);
+            wrap.appendChild(li);
+        });
+    }
+
+    function renderDemoRecommendations(recommendations) {
+        const wrap = document.getElementById('demo-recommendations');
+        wrap.innerHTML = '';
+        const list = recommendations && recommendations.length
+            ? recommendations
+            : ['建议先完成治理运行并产出结构化评级文件。'];
+        list.forEach(item => {
+            const li = document.createElement('li');
+            li.innerText = item;
+            wrap.appendChild(li);
+        });
+    }
+
+    async function loadDemoPanel() {
+        const data = await apiGet('/api/governance/demo');
+        demoState = data || {};
+
+        document.getElementById('done-view').classList.remove('show');
+        document.getElementById('demo-subtitle').innerText = demoState.run_name
+            ? `当前运行: ${demoState.run_name}`
+            : '未发现运行记录，请先启动治理运行。';
+
+        const reviewMode = String(demoState.review_mode || 'manual').toLowerCase();
+        const reviewTag = document.getElementById('demo-review-mode');
+        reviewTag.classList.remove('high', 'medium', 'low');
+        reviewTag.classList.add(reviewMode === 'none' ? 'medium' : 'low');
+        reviewTag.innerText = `模式: ${reviewMode}`;
+
+        const overall = demoState.overall_rating || {};
+        const risk = demoState.risk_distribution || {};
+
+        document.getElementById('demo-grade').innerText = overall.grade
+            ? `${overall.grade} (${overall.label || '-'})`
+            : '-';
+        document.getElementById('demo-score').innerText = overall.score_0_100 !== undefined
+            ? `${overall.score_0_100}`
+            : '-';
+        document.getElementById('demo-high').innerText = String(risk.high || 0);
+        document.getElementById('demo-segments').innerText = String(demoState.event_segment_count || 0);
+
+        const topEvents = demoState.top_events || [];
+        selectedDemoEventIndex = 0;
+        selectDemoEvent(0);
+        if (!topEvents.length) {
+            renderDemoEventDetail(null);
+        }
+        renderDemoSteps(demoState.steps || []);
+        renderDemoRecommendations(demoState.recommendations || []);
+
+        setBanner('危险事件演示', `Top ${topEvents.length}`, `高风险 ${risk.high || 0}`);
+    }
+
     async function fetchStates() {
         const [rState, gState, pState] = await Promise.all([
             apiGet('/api/state'),
@@ -799,8 +1636,47 @@
         updatePipelinePanel();
     }
 
-    function fillPipelineFormDefaults() {
+    function bindFormDirtyTracking() {
+        const pipelineFields = [
+            'run-max-frames',
+            'run-model',
+            'run-data-dir',
+            'run-bev-dir',
+            'run-raw-dir',
+            'run-output-dir',
+            'run-use-llm',
+            'run-gen-report',
+            'run-no-review',
+            'run-auto-human-report'
+        ];
+        pipelineFields.forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', () => { pipelineFormDirty = true; });
+            el.addEventListener('change', () => { pipelineFormDirty = true; });
+        });
+
+        const settingsFields = [
+            'input-sg',
+            'input-img',
+            'input-schem',
+            'input-gov-out',
+            'input-ts-dir',
+            'input-pipeline-script',
+            'input-pipeline-python',
+            'input-run'
+        ];
+        settingsFields.forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', () => { settingsFormDirty = true; });
+            el.addEventListener('change', () => { settingsFormDirty = true; });
+        });
+    }
+
+    function fillPipelineFormDefaults(force = false) {
         if (!relationState) return;
+        if (pipelineFormDirty && !force) return;
         const cfg = relationState.config || {};
         if (!document.getElementById('run-data-dir').value) {
             document.getElementById('run-data-dir').value = cfg.pipeline_data_dir || cfg.sg_dir || '';
@@ -818,6 +1694,8 @@
         document.getElementById('run-model').value = cfg.pipeline_model || 'qwen3-vl:4b';
         document.getElementById('run-use-llm').checked = !!cfg.pipeline_use_llm;
         document.getElementById('run-gen-report').checked = !!cfg.pipeline_generate_report;
+        document.getElementById('run-no-review').checked = !!cfg.pipeline_no_review_mode;
+        document.getElementById('run-auto-human-report').checked = cfg.pipeline_auto_human_report !== false;
     }
 
     function updatePipelinePanel() {
@@ -900,14 +1778,21 @@
     }
 
     async function loadCardByMode() {
+        closeImageLightbox();
         resetAllZooms();
         setActionLabels();
         if (currentMode === 'governance') {
             await loadGovernanceCard();
-        } else {
+            await fetchStates();
+        } else if (currentMode === 'relation') {
             await loadRelationCard();
+            await fetchStates();
+        } else {
+            await fetchStates();
+            await loadDemoPanel();
+            updateProgressAndMeta();
+            updateUndoButton();
         }
-        await fetchStates();
     }
 
     function switchMode(mode) {
@@ -974,6 +1859,10 @@
             await loadGovernanceCard();
             updateProgressAndMeta();
             updateUndoButton();
+        } else if (currentMode === 'demo') {
+            await loadDemoPanel();
+            updateProgressAndMeta();
+            updateUndoButton();
         }
     }
 
@@ -994,6 +1883,8 @@
                 model: document.getElementById('run-model').value,
                 use_llm: document.getElementById('run-use-llm').checked,
                 generate_report: document.getElementById('run-gen-report').checked,
+                no_review_mode: document.getElementById('run-no-review').checked,
+                auto_human_report: document.getElementById('run-auto-human-report').checked,
                 data_dir: document.getElementById('run-data-dir').value,
                 bev_dir: document.getElementById('run-bev-dir').value,
                 raw_image_dir: document.getElementById('run-raw-dir').value,
@@ -1015,8 +1906,11 @@
         }
     }
 
-    function fillSettingsFields() {
+    function fillSettingsFields(force = false) {
         if (!relationState || !governanceState) return;
+        const modalOpen = document.getElementById('settings-modal').classList.contains('active');
+        if (modalOpen && settingsFormDirty && !force) return;
+
         const cfg = relationState.config || {};
 
         document.getElementById('input-sg').value = cfg.sg_dir || '';
@@ -1047,16 +1941,19 @@
     }
 
     function openSettings() {
+        settingsFormDirty = false;
+        fillSettingsFields(true);
         document.getElementById('settings-modal').classList.add('active');
     }
 
     function closeSettings() {
         document.getElementById('settings-modal').classList.remove('active');
+        settingsFormDirty = false;
     }
 
     async function refreshGovernanceRuns() {
         await rebuildGovernanceIndex();
-        fillSettingsFields();
+        fillSettingsFields(true);
     }
 
     async function saveSettings() {
@@ -1076,11 +1973,15 @@
             pipeline_max_frames: Number(document.getElementById('run-max-frames').value || 20),
             pipeline_use_llm: document.getElementById('run-use-llm').checked,
             pipeline_generate_report: document.getElementById('run-gen-report').checked,
+            pipeline_no_review_mode: document.getElementById('run-no-review').checked,
+            pipeline_auto_human_report: document.getElementById('run-auto-human-report').checked,
         };
 
         await apiPost('/api/config', payload);
         relationHistory = [];
         governanceHistory = [];
+        pipelineFormDirty = false;
+        settingsFormDirty = false;
         closeSettings();
         await loadCardByMode();
     }
@@ -1141,9 +2042,6 @@
             try {
                 pipelineState = await apiGet('/api/pipeline/state');
                 updatePipelinePanel();
-                if (!pipelineState.running) {
-                    await fetchStates();
-                }
             } catch (err) {
                 console.warn('pipeline poll failed', err);
             }
@@ -1155,15 +2053,21 @@
         if (event.ctrlKey || event.metaKey || event.altKey) return;
 
         const key = event.key.toLowerCase();
+        if (key === 'escape') {
+            closeImageLightbox();
+            return;
+        }
         if (key === 'y') await handlePositive();
         if (key === 'n') await handleNegative();
         if (key === 's') await handleSkip();
         if (key === 'b' || key === 'arrowleft') await undoMark();
         if (key === '1') switchMode('governance');
         if (key === '2') switchMode('relation');
+        if (key === '3') switchMode('demo');
     });
 
     window.onload = async () => {
+        bindFormDirtyTracking();
         await fetchStates();
         updateModeButtons();
         setupPolling();

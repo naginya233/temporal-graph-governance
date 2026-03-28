@@ -7,6 +7,7 @@ import threading
 from collections import deque
 from datetime import datetime
 from typing import Any, Deque, Dict, List, Optional
+from urllib.parse import quote
 
 from flask import Flask, jsonify, render_template, request, send_file
 
@@ -44,6 +45,8 @@ config: Dict[str, Any] = {
     "pipeline_max_frames": 20,
     "pipeline_use_llm": True,
     "pipeline_generate_report": True,
+    "pipeline_no_review_mode": False,
+    "pipeline_auto_human_report": True,
 }
 
 TARGET_RELATIONS = [
@@ -59,6 +62,15 @@ RISK_WEIGHT = {
     "low": 0,
     "medium": 1,
     "high": 2,
+}
+
+CAUSE_RELATION_HINTS: Dict[str, List[str]] = {
+    "yielding_disorder": ["yielding_to", "yield", "crossing"],
+    "conflict_chain": ["conflict_with", "crossing", "overtaking", "come_into"],
+    "deadlock": ["conflict_with", "yielding_to", "following"],
+    "following_cycle": ["following", "yielding_to"],
+    "following_bottleneck": ["following", "conflict_with"],
+    "other_risk": ["conflict_with", "yielding_to", "following", "crossing"],
 }
 
 index_data: List[Dict[str, Any]] = []
@@ -153,6 +165,129 @@ def _run_review_html_path(run_jsonl: str) -> str:
     return f"{stem}_review.html"
 
 
+def _run_risk_structured_path(run_jsonl: str) -> str:
+    stem = os.path.splitext(run_jsonl)[0]
+    return f"{stem}_risk_rating_structured.json"
+
+
+def _file_url(path: str) -> str:
+    safe = _normalize_path(path)
+    if not safe or not os.path.exists(safe):
+        return ""
+    return f"/api/file?path={quote(safe)}"
+
+
+def _image_url(path: str) -> str:
+    safe = _normalize_path(path)
+    if not safe or not os.path.exists(safe):
+        return ""
+    return f"/api/image?path={quote(safe)}"
+
+
+def _extract_event_relations(scene_graph_json: str, causes: List[str], limit: int = 10) -> Dict[str, Any]:
+    path = _normalize_path(scene_graph_json)
+    if not path or not os.path.exists(path):
+        return {
+            "key_relations": [],
+            "stats": {
+                "object_object_total": 0,
+                "object_map_total": 0,
+            },
+        }
+
+    payload = _safe_read_json(path, {})
+    if not isinstance(payload, dict):
+        return {
+            "key_relations": [],
+            "stats": {
+                "object_object_total": 0,
+                "object_map_total": 0,
+            },
+        }
+
+    object_object = payload.get("object_object_triples", [])
+    object_map = payload.get("object_map_triples", [])
+    object_object = object_object if isinstance(object_object, list) else []
+    object_map = object_map if isinstance(object_map, list) else []
+
+    cause_list = causes if isinstance(causes, list) else []
+    relation_weights: Dict[str, int] = {}
+    for cause in cause_list:
+        for rel in CAUSE_RELATION_HINTS.get(str(cause), []):
+            relation_weights[rel] = relation_weights.get(rel, 0) + 3
+    if not relation_weights:
+        for rel in ["conflict_with", "yielding_to", "following", "crossing", "overtaking"]:
+            relation_weights[rel] = 1
+
+    scored: List[Dict[str, Any]] = []
+    for triple in object_object + object_map:
+        if not isinstance(triple, dict):
+            continue
+        relation = str(triple.get("relation", "")).strip()
+        if not relation:
+            continue
+
+        score = relation_weights.get(relation, 0)
+        if score <= 0:
+            continue
+
+        subject = str(triple.get("subject", ""))
+        object_id = str(triple.get("object", ""))
+        subject_type = str(triple.get("subject_type", ""))
+        object_type = str(triple.get("object_type", ""))
+        score += 1 if subject_type in {"CAR", "VAN", "TRUCK", "BUS", "PEDESTRIAN", "CYCLIST"} else 0
+
+        matched_causes = [c for c in cause_list if relation in CAUSE_RELATION_HINTS.get(str(c), [])]
+        evidence = ",".join(matched_causes) if matched_causes else "relation-prior"
+
+        scored.append(
+            {
+                "subject": subject,
+                "subject_type": subject_type,
+                "relation": relation,
+                "object": object_id,
+                "object_type": object_type,
+                "evidence": evidence,
+                "score": score,
+            }
+        )
+
+    scored.sort(
+        key=lambda x: (
+            -int(x.get("score", 0)),
+            str(x.get("relation", "")),
+            str(x.get("subject", "")),
+            str(x.get("object", "")),
+        )
+    )
+
+    dedup: List[Dict[str, Any]] = []
+    seen = set()
+    for item in scored:
+        key = (
+            item.get("subject", ""),
+            item.get("relation", ""),
+            item.get("object", ""),
+            item.get("subject_type", ""),
+            item.get("object_type", ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        item.pop("score", None)
+        dedup.append(item)
+        if len(dedup) >= limit:
+            break
+
+    return {
+        "key_relations": dedup,
+        "stats": {
+            "object_object_total": len(object_object),
+            "object_map_total": len(object_map),
+        },
+    }
+
+
 def _list_governance_runs() -> List[Dict[str, str]]:
     outputs_dir = _normalize_path(config.get("gov_outputs_dir", ""))
     if not outputs_dir or not os.path.isdir(outputs_dir):
@@ -232,6 +367,8 @@ def _sync_pipeline_defaults() -> None:
     config["pipeline_max_frames"] = _as_int(config.get("pipeline_max_frames", 20), default=20)
     config["pipeline_use_llm"] = _as_bool(config.get("pipeline_use_llm", True), default=True)
     config["pipeline_generate_report"] = _as_bool(config.get("pipeline_generate_report", True), default=True)
+    config["pipeline_no_review_mode"] = _as_bool(config.get("pipeline_no_review_mode", False), default=False)
+    config["pipeline_auto_human_report"] = _as_bool(config.get("pipeline_auto_human_report", True), default=True)
 
 
 
@@ -325,10 +462,15 @@ def build_or_load_governance_index(force_rebuild: bool = False) -> None:
         old_selected_run = _normalize_path(old_payload.get("selected_run", ""))
         old_records = old_payload.get("records", [])
         if isinstance(old_records, list):
+            has_event_trace_fields = all(
+                isinstance(r, dict) and "line_no" in r and "risk_detail" in r
+                for r in old_records[:20]
+            ) if old_records else True
             if (
                 not force_rebuild
                 and old_selected_run
                 and old_selected_run == _normalize_path(config.get("selected_run", ""))
+                and has_event_trace_fields
             ):
                 gov_index_data = old_records
                 gov_meta = {
@@ -364,11 +506,12 @@ def build_or_load_governance_index(force_rebuild: bool = False) -> None:
     summary_payload = _safe_read_json(_run_summary_path(selected_run), {})
     summary_data = summary_payload.get("summary", {}) if isinstance(summary_payload, dict) else {}
     event_segments = summary_payload.get("event_segments", []) if isinstance(summary_payload, dict) else []
+    default_status = "confirmed" if str(summary_data.get("review_mode", "manual")).lower() == "none" else "pending"
 
     parsed_records: List[Dict[str, Any]] = []
     try:
         with open(selected_run, "r", encoding="utf-8") as f:
-            for line in f:
+            for line_no, line in enumerate(f, start=1):
                 line = line.strip()
                 if not line:
                     continue
@@ -391,9 +534,19 @@ def build_or_load_governance_index(force_rebuild: bool = False) -> None:
                 parsed_records.append(
                     {
                         "frame_id": frame_id,
+                        "line_no": line_no,
                         "file": record.get("file", ""),
                         "risk_level": risk_level,
                         "risk_score": risk_score,
+                        "risk_detail": {
+                            "yielding_cnt": int(risk.get("yielding_cnt", 0) or 0),
+                            "chain_cnt": int(risk.get("chain_cnt", 0) or 0),
+                            "deadlock_cnt": int(risk.get("deadlock_cnt", 0) or 0),
+                            "cycle_detected": bool(risk.get("cycle_detected", False)),
+                            "bottleneck_cnt": int(risk.get("bottleneck_cnt", 0) or 0),
+                            "max_chain": int(risk.get("max_chain", 0) or 0),
+                            "score": risk_score,
+                        },
                         "dominant_causes": _dominant_causes_from_risk(risk),
                         "fast_decision": event_analysis.get("fast_decision", ""),
                         "llm_insight": event_analysis.get("llm_insight", ""),
@@ -403,7 +556,7 @@ def build_or_load_governance_index(force_rebuild: bool = False) -> None:
                             "bev_image": bev_image,
                             "scene_graph_json": scene_graph_json,
                         },
-                        "status": old_status_map.get(frame_id, "pending"),
+                        "status": old_status_map.get(frame_id, default_status),
                     }
                 )
     except Exception as exc:
@@ -538,6 +691,11 @@ def _start_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
     model = str(payload.get("model", config.get("pipeline_model", "qwen3-vl:4b")) or "qwen3-vl:4b")
     use_llm = _as_bool(payload.get("use_llm", config.get("pipeline_use_llm", True)), default=True)
     generate_report = _as_bool(payload.get("generate_report", config.get("pipeline_generate_report", True)), default=True)
+    no_review_mode = _as_bool(payload.get("no_review_mode", config.get("pipeline_no_review_mode", False)), default=False)
+    auto_human_report = _as_bool(
+        payload.get("auto_human_report", config.get("pipeline_auto_human_report", True)),
+        default=True,
+    )
 
     if not traffic_system_dir:
         traffic_system_dir = _default_traffic_system_dir()
@@ -585,6 +743,10 @@ def _start_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
         command.append("--no-llm")
     if not generate_report:
         command.append("--no-report")
+    if no_review_mode:
+        command.append("--no-review-mode")
+    if not auto_human_report:
+        command.append("--no-auto-human-report")
 
     config["traffic_system_dir"] = traffic_system_dir
     config["pipeline_script"] = pipeline_script
@@ -596,6 +758,8 @@ def _start_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
     config["pipeline_model"] = model
     config["pipeline_use_llm"] = use_llm
     config["pipeline_generate_report"] = generate_report
+    config["pipeline_no_review_mode"] = no_review_mode
+    config["pipeline_auto_human_report"] = auto_human_report
     config["gov_outputs_dir"] = output_dir
     save_config()
 
@@ -701,6 +865,10 @@ def update_config():
         config["pipeline_use_llm"] = _as_bool(data.get("pipeline_use_llm"), default=True)
     if "pipeline_generate_report" in data:
         config["pipeline_generate_report"] = _as_bool(data.get("pipeline_generate_report"), default=True)
+    if "pipeline_no_review_mode" in data:
+        config["pipeline_no_review_mode"] = _as_bool(data.get("pipeline_no_review_mode"), default=False)
+    if "pipeline_auto_human_report" in data:
+        config["pipeline_auto_human_report"] = _as_bool(data.get("pipeline_auto_human_report"), default=True)
 
     _sync_pipeline_defaults()
     save_config()
@@ -773,6 +941,225 @@ def get_governance_state():
             "risk_distribution": risk_distribution,
             "summary_file": summary_path if summary_path and os.path.exists(summary_path) else "",
             "review_html": review_html if review_html and os.path.exists(review_html) else "",
+        }
+    )
+
+
+@app.route("/api/governance/demo", methods=["GET"])
+def get_governance_demo():
+    selected_run = gov_meta.get("selected_run", "")
+    summary = gov_meta.get("summary", {}) if isinstance(gov_meta.get("summary"), dict) else {}
+    event_segments = gov_meta.get("event_segments", []) if isinstance(gov_meta.get("event_segments"), list) else []
+
+    risk_structured: Dict[str, Any] = {}
+    if selected_run:
+        risk_structured = _safe_read_json(_run_risk_structured_path(selected_run), {})
+        if not isinstance(risk_structured, dict):
+            risk_structured = {}
+
+    risk_levels = summary.get("risk_levels", {}) if isinstance(summary.get("risk_levels"), dict) else {}
+    risk_distribution = {
+        "high": int(risk_levels.get("high", 0)),
+        "medium": int(risk_levels.get("medium", 0)),
+        "low": int(risk_levels.get("low", 0)),
+    }
+    if sum(risk_distribution.values()) == 0:
+        risk_distribution = {
+            "high": sum(1 for r in gov_index_data if str(r.get("risk_level", "low")) == "high"),
+            "medium": sum(1 for r in gov_index_data if str(r.get("risk_level", "low")) == "medium"),
+            "low": sum(1 for r in gov_index_data if str(r.get("risk_level", "low")) == "low"),
+        }
+
+    status_distribution = {
+        "confirmed": sum(1 for r in gov_index_data if str(r.get("status", "pending")) == "confirmed"),
+        "suspect": sum(1 for r in gov_index_data if str(r.get("status", "pending")) == "suspect"),
+        "pending": sum(1 for r in gov_index_data if str(r.get("status", "pending")) == "pending"),
+    }
+
+    record_map = {
+        _normalize_frame_id(r.get("frame_id")): r
+        for r in gov_index_data
+        if _normalize_frame_id(r.get("frame_id"))
+    }
+
+    summary_file = _run_summary_path(selected_run) if selected_run else ""
+    risk_structured_file = _run_risk_structured_path(selected_run) if selected_run else ""
+
+    def _event_reasoning_steps(event: Dict[str, Any]) -> List[Dict[str, str]]:
+        risk_detail = event.get("risk_detail", {}) if isinstance(event.get("risk_detail"), dict) else {}
+        yielding_cnt = int(risk_detail.get("yielding_cnt", 0) or 0)
+        chain_cnt = int(risk_detail.get("chain_cnt", 0) or 0)
+        deadlock_cnt = int(risk_detail.get("deadlock_cnt", 0) or 0)
+        cycle_detected = bool(risk_detail.get("cycle_detected", False))
+        bottleneck_cnt = int(risk_detail.get("bottleneck_cnt", 0) or 0)
+        max_chain = int(risk_detail.get("max_chain", 0) or 0)
+        risk_score = int(event.get("risk_score", 0) or 0)
+        risk_level = str(event.get("risk_level", "low") or "low")
+        causes = event.get("dominant_causes", []) if isinstance(event.get("dominant_causes"), list) else []
+
+        return [
+            {
+                "title": "步骤1: 读取该事件原始证据",
+                "detail": (
+                    f"定位到 Frame {event.get('frame_id', '-')}, 来自运行文件第 {event.get('line_no', '-')} 行，"
+                    f"关联 scene_graph={_normalize_path(event.get('trace', {}).get('scene_graph_json', '')) or '-'}。"
+                ),
+            },
+            {
+                "title": "步骤2: 识别关系异常模式",
+                "detail": (
+                    f"yielding_cnt={yielding_cnt}, chain_cnt={chain_cnt}, deadlock_cnt={deadlock_cnt}, "
+                    f"cycle_detected={cycle_detected}, bottleneck_cnt={bottleneck_cnt}, max_chain={max_chain}; "
+                    f"主因={', '.join(causes) if causes else '无明显主因'}。"
+                ),
+            },
+            {
+                "title": "步骤3: 计算风险等级",
+                "detail": f"根据上述特征计算 score={risk_score}，映射风险等级为 {risk_level.upper()}。",
+            },
+            {
+                "title": "步骤4: 输出治理结论",
+                "detail": (
+                    f"系统给出快速决策: {event.get('fast_decision') or '暂无'}; "
+                    f"人工审阅状态: {event.get('status', 'pending')}。"
+                ),
+            },
+        ]
+
+    def _trace_links(event: Dict[str, Any]) -> List[Dict[str, str]]:
+        trace = event.get("trace", {}) if isinstance(event.get("trace"), dict) else {}
+        links: List[Dict[str, str]] = []
+        for label, path, kind in [
+            ("运行 JSONL", trace.get("jsonl_file", ""), "file"),
+            ("运行汇总 JSON", trace.get("summary_file", ""), "file"),
+            ("风险结构化 JSON", trace.get("risk_structured_file", ""), "file"),
+            ("场景图 JSON", trace.get("scene_graph_json", ""), "file"),
+            ("原图", trace.get("raw_image", ""), "image"),
+            ("BEV 图", trace.get("bev_image", ""), "image"),
+            ("源输入文件", trace.get("record_file", ""), "file"),
+        ]:
+            if not path:
+                continue
+            url = _image_url(path) if kind == "image" else _file_url(path)
+            if url:
+                links.append({"label": label, "url": url, "path": _normalize_path(path)})
+        return links
+
+    top_events: List[Dict[str, Any]] = []
+    structured_top = risk_structured.get("top_risk_frames", [])
+    if isinstance(structured_top, list) and structured_top:
+        for item in structured_top[:6]:
+            if not isinstance(item, dict):
+                continue
+            frame_id = _normalize_frame_id(item.get("frame_id"))
+            rec = record_map.get(frame_id, {})
+            top_events.append(
+                {
+                    "frame_id": frame_id,
+                    "line_no": int(rec.get("line_no", 0) or 0),
+                    "risk_level": str(item.get("risk_level") or rec.get("risk_level") or "low"),
+                    "risk_score": int(item.get("risk_score", rec.get("risk_score", 0)) or 0),
+                    "dominant_causes": item.get("dominant_causes") or rec.get("dominant_causes", []),
+                    "fast_decision": str(item.get("fast_decision") or rec.get("fast_decision") or ""),
+                    "status": str(rec.get("status", "pending")),
+                    "governance_report": str(rec.get("governance_report", "") or item.get("fast_decision", "")),
+                    "llm_insight": str(rec.get("llm_insight", "")),
+                    "risk_detail": rec.get("risk_detail", {}),
+                    "assets": rec.get("assets", {}),
+                    "trace": {
+                        "jsonl_file": selected_run,
+                        "jsonl_line": int(rec.get("line_no", 0) or 0),
+                        "summary_file": summary_file,
+                        "risk_structured_file": risk_structured_file,
+                        "record_file": rec.get("file", ""),
+                        "scene_graph_json": (rec.get("assets", {}) or {}).get("scene_graph_json", ""),
+                        "raw_image": (rec.get("assets", {}) or {}).get("raw_image", ""),
+                        "bev_image": (rec.get("assets", {}) or {}).get("bev_image", ""),
+                    },
+                }
+            )
+    else:
+        for rec in gov_index_data[:6]:
+            top_events.append(
+                {
+                    "frame_id": _normalize_frame_id(rec.get("frame_id")),
+                    "line_no": int(rec.get("line_no", 0) or 0),
+                    "risk_level": str(rec.get("risk_level", "low")),
+                    "risk_score": int(rec.get("risk_score", 0)),
+                    "dominant_causes": rec.get("dominant_causes", []),
+                    "fast_decision": str(rec.get("fast_decision", "")),
+                    "status": str(rec.get("status", "pending")),
+                    "governance_report": str(rec.get("governance_report", "")),
+                    "llm_insight": str(rec.get("llm_insight", "")),
+                    "risk_detail": rec.get("risk_detail", {}),
+                    "assets": rec.get("assets", {}),
+                    "trace": {
+                        "jsonl_file": selected_run,
+                        "jsonl_line": int(rec.get("line_no", 0) or 0),
+                        "summary_file": summary_file,
+                        "risk_structured_file": risk_structured_file,
+                        "record_file": rec.get("file", ""),
+                        "scene_graph_json": (rec.get("assets", {}) or {}).get("scene_graph_json", ""),
+                        "raw_image": (rec.get("assets", {}) or {}).get("raw_image", ""),
+                        "bev_image": (rec.get("assets", {}) or {}).get("bev_image", ""),
+                    },
+                }
+            )
+
+    for event in top_events:
+        trace = event.get("trace", {}) if isinstance(event.get("trace"), dict) else {}
+        relation_pack = _extract_event_relations(
+            str(trace.get("scene_graph_json", "")),
+            event.get("dominant_causes", []),
+            limit=10,
+        )
+        event["key_relations"] = relation_pack.get("key_relations", [])
+        event["scene_graph_stats"] = relation_pack.get("stats", {})
+        event["reasoning_steps"] = _event_reasoning_steps(event)
+        event["trace_links"] = _trace_links(event)
+
+    processed = int(summary.get("processed", len(gov_index_data)) or 0)
+    temporal = summary.get("temporal_calibration", {}) if isinstance(summary.get("temporal_calibration"), dict) else {}
+    overall_rating = risk_structured.get("overall_rating", {}) if isinstance(risk_structured.get("overall_rating"), dict) else {}
+    recommendations = risk_structured.get("recommendations", []) if isinstance(risk_structured.get("recommendations"), list) else []
+
+    steps = [
+        {
+            "title": "多源数据对齐",
+            "detail": f"对齐并处理 {processed} 帧场景图、原图与 BEV 信息，形成统一评估输入。",
+        },
+        {
+            "title": "关系拓扑风险识别",
+            "detail": (
+                f"识别 yielding / conflict / deadlock 等关系，统计高风险 {risk_distribution['high']} 帧、"
+                f"中风险 {risk_distribution['medium']} 帧。"
+            ),
+        },
+        {
+            "title": "时序一致性校准",
+            "detail": (
+                "通过 EMA 与持续边增强抑制抖动，"
+                f"本次 changed_level_frames={int(temporal.get('changed_level_frames', 0))}。"
+            ),
+        },
+        {
+            "title": "事件段聚合与重点提取",
+            "detail": f"聚合出 {len(event_segments)} 个连续事件段，并提取 Top 危险帧用于审阅与演示。",
+        },
+    ]
+
+    return jsonify(
+        {
+            "selected_run": selected_run,
+            "run_name": os.path.basename(selected_run) if selected_run else "",
+            "review_mode": str(summary.get("review_mode", "manual")),
+            "risk_distribution": risk_distribution,
+            "status_distribution": status_distribution,
+            "event_segment_count": len(event_segments),
+            "overall_rating": overall_rating,
+            "top_events": top_events,
+            "recommendations": recommendations,
+            "steps": steps,
         }
     )
 
@@ -864,6 +1251,14 @@ def serve_image():
     if path and os.path.exists(path):
         return send_file(path)
     return "Image not found", 404
+
+
+@app.route("/api/file")
+def serve_file():
+    path = request.args.get("path", "")
+    if path and os.path.exists(path) and os.path.isfile(path):
+        return send_file(path)
+    return "File not found", 404
 
 
 if __name__ == "__main__":

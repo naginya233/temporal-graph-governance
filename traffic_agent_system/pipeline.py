@@ -11,6 +11,7 @@ from governance.temporal_consistency_calibrator import TemporalConsistencyCalibr
 from governance.temporal_event_segmenter import TemporalEventSegmenter
 from optimization.topology_pruning import DynamicTopologyPruner
 from reporting.review_report import ReviewReportBuilder
+from reporting.risk_rating_workflow import RiskRatingWorkflow
 
 class TrafficGovernancePipeline:
     """
@@ -25,6 +26,8 @@ class TrafficGovernancePipeline:
         model_name: str = "qwen3-vl:4b",
         output_dir: str = "outputs",
         generate_report: bool = True,
+        no_review_mode: bool = False,
+        auto_human_report: bool = True,
         enable_temporal_calibration: bool = True,
         calibration_alpha: float = 0.7,
         calibration_persistence_window: int = 2,
@@ -38,7 +41,10 @@ class TrafficGovernancePipeline:
         self.pruner = DynamicTopologyPruner()
         self.output_dir = output_dir
         self.generate_report = generate_report
+        self.no_review_mode = no_review_mode
+        self.auto_human_report = auto_human_report
         self.report_builder = ReviewReportBuilder(output_dir)
+        self.risk_workflow = RiskRatingWorkflow(output_dir)
         self.enable_temporal_calibration = enable_temporal_calibration
         self.calibrator = TemporalConsistencyCalibrator(
             alpha=calibration_alpha,
@@ -145,6 +151,7 @@ class TrafficGovernancePipeline:
         summary = {
             "processed": processed,
             "skipped": skipped,
+            "review_mode": "none" if self.no_review_mode else "manual",
             "risk_levels": risk_level_counts,
             "global_pruning": global_stats,
             "temporal_calibration": self.calibrator.summary() if self.enable_temporal_calibration else {"enabled": False},
@@ -166,9 +173,18 @@ class TrafficGovernancePipeline:
             )
         summary["summary_file"] = summary_file
 
-        if self.generate_report:
+        if self.generate_report and not self.no_review_mode:
             report_files = self.report_builder.build(summary, records, event_segments)
             summary["report_files"] = report_files
+
+        risk_rating_files = self.risk_workflow.build(
+            summary=summary,
+            records=records,
+            event_segments=event_segments,
+            review_mode=summary["review_mode"],
+            auto_human_report=self.auto_human_report,
+        )
+        summary["risk_rating_files"] = risk_rating_files
 
         print("\n=== 运行汇总 ===")
         print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -196,6 +212,8 @@ if __name__ == "__main__":
     parser.add_argument("--max-frames", type=int, default=10, help="Max number of frames to process")
     parser.add_argument("--no-llm", action="store_true", help="Disable Ollama inference")
     parser.add_argument("--no-report", action="store_true", help="Disable markdown/html report generation")
+    parser.add_argument("--no-review-mode", action="store_true", help="Skip manual review workflow and mark run as direct-delivery mode")
+    parser.add_argument("--no-auto-human-report", action="store_true", help="Disable auto-generated human-friendly risk rating reports")
     parser.add_argument("--disable-temporal-calibration", action="store_true", help="Disable temporal consistency calibration")
     parser.add_argument("--calibration-alpha", type=float, default=0.7, help="EMA alpha for temporal calibration")
     parser.add_argument("--calibration-persistence-window", type=int, default=2, help="Persistent edge threshold in frames")
@@ -211,6 +229,8 @@ if __name__ == "__main__":
         model_name=args.model,
         output_dir=args.output_dir,
         generate_report=not args.no_report,
+        no_review_mode=args.no_review_mode,
+        auto_human_report=not args.no_auto_human_report,
         enable_temporal_calibration=not args.disable_temporal_calibration,
         calibration_alpha=args.calibration_alpha,
         calibration_persistence_window=args.calibration_persistence_window,
