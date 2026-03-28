@@ -342,6 +342,7 @@
         }
 
         .image-wrapper {
+            position: relative;
             width: 100%;
             height: 100%;
             min-height: 280px;
@@ -365,6 +366,29 @@
             -webkit-user-drag: none;
         }
 
+        .bev-overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 6;
+            transform-origin: center center;
+        }
+
+        .bev-overlay-status {
+            position: absolute;
+            left: 10px;
+            bottom: 10px;
+            z-index: 11;
+            background: rgba(15, 23, 42, 0.68);
+            color: #ffffff;
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
         .analysis {
             display: none;
         }
@@ -385,6 +409,48 @@
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
+        }
+
+        .analysis-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .toggle-bev {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--line);
+            background: #ffffff;
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: 12px;
+            color: #334155;
+            font-weight: 700;
+            user-select: none;
+        }
+
+        .toggle-bev input {
+            margin: 0;
+            accent-color: #0f766e;
+        }
+
+        .mode-pill {
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 12px;
+            font-weight: 700;
+            border: 1px solid var(--line);
+            background: #eef2ff;
+            color: #1e3a8a;
+        }
+
+        .mode-pill.dynamic {
+            background: #dcfce7;
+            color: #166534;
+            border-color: #86efac;
         }
 
         .chip {
@@ -682,14 +748,16 @@
         <div class="image-box">
             <span class="badge">原图</span>
             <div class="image-wrapper" onclick="toggleZoom(0, event)" onmousemove="panZoom(0, event)" onmouseleave="resetZoom(0, event)">
-                <img id="img-original" class="preview" src="" alt="加载中..." onerror="this.alt='无法加载该图片'">
+                <img id="img-original" class="preview zoom-layer" src="" alt="加载中..." onerror="this.alt='无法加载该图片'">
                 <div class="zoom-hint">点击放大并移动查看</div>
             </div>
         </div>
         <div class="image-box">
             <span class="badge">BEV 场景图</span>
             <div class="image-wrapper" onclick="toggleZoom(1, event)" onmousemove="panZoom(1, event)" onmouseleave="resetZoom(1, event)">
-                <img id="img-schematic" class="preview" src="" alt="加载中..." onerror="this.alt='无法加载该图片'">
+                <img id="img-schematic" class="preview zoom-layer" src="" alt="加载中..." onerror="this.alt='无法加载该图片'">
+                <svg id="bev-overlay" class="bev-overlay zoom-layer" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg>
+                <div class="bev-overlay-status" id="bev-overlay-status">未选择车流对象</div>
                 <div class="zoom-hint">点击放大并移动查看</div>
             </div>
         </div>
@@ -698,7 +766,14 @@
     <div class="panel analysis" id="analysis-panel">
         <div class="analysis-top">
             <strong id="run-name">运行记录: -</strong>
-            <div class="chips" id="cause-chips"></div>
+            <div class="analysis-controls">
+                <label class="toggle-bev">
+                    <input type="checkbox" id="toggle-dynamic-bev" onchange="onDynamicBevToggle(this.checked)">
+                    动态高亮 BEV
+                </label>
+                <span id="bev-render-mode" class="mode-pill">静态 BEV</span>
+                <div class="chips" id="cause-chips"></div>
+            </div>
         </div>
         <div class="flow-grid" id="flow-grid">
             <div class="flow-col">
@@ -774,6 +849,12 @@
     let lastPipelineLogSignature = '';
     let lastRawImagePath = '';
     let lastBevImagePath = '';
+    let staticBevPath = '';
+    let currentFrameId = '';
+    let currentFocusEntities = [];
+    let dynamicBevEnabled = false;
+    let lastDynamicSignature = '';
+    let currentBevOverlay = null;
     let slowdownLinkSelection = null;
     let slowdownLinkContext = null;
     let isZoomed = [false, false];
@@ -857,9 +938,64 @@
         document.getElementById('object-info').innerText = objectText || '-';
     }
 
+    function setSchematicSrc(src, force = false) {
+        const bevImg = document.getElementById('img-schematic');
+        const key = String(src || '');
+        if (!force && key === lastBevImagePath) return;
+        bevImg.src = key;
+        lastBevImagePath = key;
+    }
+
+    function updateBevRenderModeBadge() {
+        const badge = document.getElementById('bev-render-mode');
+        if (!badge) return;
+        const isDynamic = dynamicBevEnabled && currentMode === 'governance' && !!currentFrameId;
+        badge.classList.toggle('dynamic', isDynamic);
+        badge.innerText = isDynamic ? '动态 BEV' : '静态 BEV';
+    }
+
+    function applyBevRenderMode(force = false) {
+        const svg = document.getElementById('bev-overlay');
+        const status = document.getElementById('bev-overlay-status');
+        const useDynamic = dynamicBevEnabled && currentMode === 'governance' && !!currentFrameId;
+
+        updateBevRenderModeBadge();
+
+        // 静态模式不再展示叠加高亮框，动态模式也由后端重渲染直接输出高亮。
+        if (svg) {
+            svg.style.display = 'none';
+            if (!useDynamic) svg.innerHTML = '';
+        }
+        if (status) status.style.display = 'none';
+
+        if (useDynamic) {
+            const entityKey = currentFocusEntities.join(',');
+            const signature = `${currentFrameId}|${entityKey}`;
+            if (force || signature !== lastDynamicSignature) {
+                const timestamp = Date.now();
+                const src = `/api/governance/render_bev?frame_id=${encodeURIComponent(currentFrameId)}&entities=${encodeURIComponent(entityKey)}&t=${timestamp}`;
+                setSchematicSrc(src, true);
+                lastDynamicSignature = signature;
+            }
+            return;
+        }
+
+        lastDynamicSignature = '';
+        if (staticBevPath) {
+            const timestamp = Date.now();
+            setSchematicSrc(`/api/image?path=${encodeURIComponent(staticBevPath)}&t=${timestamp}`, force);
+        } else {
+            setSchematicSrc('', force);
+        }
+    }
+
+    function onDynamicBevToggle(enabled) {
+        dynamicBevEnabled = !!enabled;
+        applyBevRenderMode(true);
+    }
+
     function setImages(rawPath, bevPath) {
         const rawImg = document.getElementById('img-original');
-        const bevImg = document.getElementById('img-schematic');
 
         if (rawPath !== lastRawImagePath) {
             const timestamp = Date.now();
@@ -867,11 +1003,8 @@
             lastRawImagePath = rawPath || '';
         }
 
-        if (bevPath !== lastBevImagePath) {
-            const timestamp = Date.now();
-            bevImg.src = bevPath ? `/api/image?path=${encodeURIComponent(bevPath)}&t=${timestamp}` : '';
-            lastBevImagePath = bevPath || '';
-        }
+        staticBevPath = bevPath || '';
+        applyBevRenderMode(false);
     }
 
     function showDone(text) {
@@ -906,8 +1039,142 @@
         document.getElementById('flow-individuals-list').innerHTML = '<div class="flow-empty">暂无个体</div>';
         document.getElementById('flow-sources-list').innerHTML = '<div class="flow-empty">暂无源头</div>';
         document.getElementById('flow-link-hint').innerText = '点击任一对象/个体/源头可联动高亮，再次点击取消。';
+        currentFocusEntities = [];
+        renderBevEntityOverlay([]);
         slowdownLinkSelection = null;
         slowdownLinkContext = null;
+    }
+
+    function _createSvgEl(name) {
+        return document.createElementNS('http://www.w3.org/2000/svg', name);
+    }
+
+    function setBevOverlayData(data) {
+        if (data && typeof data === 'object') {
+            currentBevOverlay = data;
+        } else {
+            currentBevOverlay = null;
+        }
+        renderBevEntityOverlay([]);
+    }
+
+    function renderBevEntityOverlay(entityIds) {
+        const svg = document.getElementById('bev-overlay');
+        const status = document.getElementById('bev-overlay-status');
+        if (!svg || !status) return;
+
+        svg.innerHTML = '';
+
+        const validIds = Array.from(new Set((entityIds || []).map(v => String(v))));
+        currentFocusEntities = validIds;
+        if (!dynamicBevEnabled || currentMode !== 'governance') {
+            status.style.display = 'none';
+            svg.style.display = 'none';
+            return;
+        }
+        if (dynamicBevEnabled && currentMode === 'governance') {
+            applyBevRenderMode(false);
+        }
+        const noSelectionText = currentMode === 'governance' ? '未选择车流对象' : '关系模式不显示高亮';
+
+        if (!currentBevOverlay || currentMode !== 'governance') {
+            status.innerText = noSelectionText;
+            return;
+        }
+
+        const bounds = currentBevOverlay.world_bounds || {};
+        const minX = Number(bounds.min_x);
+        const maxX = Number(bounds.max_x);
+        const minY = Number(bounds.min_y);
+        const maxY = Number(bounds.max_y);
+        const spanX = maxX - minX;
+        const spanY = maxY - minY;
+
+        if (!(Number.isFinite(spanX) && spanX > 0 && Number.isFinite(spanY) && spanY > 0)) {
+            status.innerText = '缺少世界坐标范围';
+            return;
+        }
+
+        if (validIds.length === 0) {
+            status.innerText = '选择 flow / 个体 / 源头后显示 BEV 高亮';
+            return;
+        }
+
+        const entityPolygons = currentBevOverlay.entity_polygons || {};
+        let renderCount = 0;
+
+        validIds.forEach((entityId, idx) => {
+            const polygons = entityPolygons[entityId];
+            if (!Array.isArray(polygons) || polygons.length === 0) return;
+
+            const hue = (idx * 67) % 360;
+            const strokeColor = `hsl(${hue} 95% 42%)`;
+            const fillColor = `hsla(${hue} 95% 55% / 0.18)`;
+
+            polygons.forEach((poly) => {
+                if (!Array.isArray(poly) || poly.length < 3) return;
+                const projected = poly
+                    .filter(pt => Array.isArray(pt) && pt.length >= 2)
+                    .map(pt => {
+                        const x = Number(pt[0]);
+                        const y = Number(pt[1]);
+                        const nx = ((x - minX) / spanX) * 1000;
+                        const ny = 1000 - ((y - minY) / spanY) * 1000;
+                        return [nx, ny];
+                    })
+                    .filter(pt => Number.isFinite(pt[0]) && Number.isFinite(pt[1]));
+
+                if (projected.length < 3) return;
+
+                const polygonEl = _createSvgEl('polygon');
+                polygonEl.setAttribute('points', projected.map(pt => `${pt[0].toFixed(1)},${pt[1].toFixed(1)}`).join(' '));
+                polygonEl.setAttribute('fill', fillColor);
+                polygonEl.setAttribute('stroke', strokeColor);
+                polygonEl.setAttribute('stroke-width', '2.4');
+                polygonEl.setAttribute('vector-effect', 'non-scaling-stroke');
+                svg.appendChild(polygonEl);
+
+                renderCount += 1;
+            });
+
+            const firstPoly = polygons[0];
+            if (Array.isArray(firstPoly) && firstPoly.length > 0) {
+                const pts = firstPoly
+                    .filter(pt => Array.isArray(pt) && pt.length >= 2)
+                    .map(pt => [Number(pt[0]), Number(pt[1])])
+                    .filter(pt => Number.isFinite(pt[0]) && Number.isFinite(pt[1]));
+                if (pts.length > 0) {
+                    const cxWorld = pts.reduce((acc, pt) => acc + pt[0], 0) / pts.length;
+                    const cyWorld = pts.reduce((acc, pt) => acc + pt[1], 0) / pts.length;
+                    const cx = ((cxWorld - minX) / spanX) * 1000;
+                    const cy = 1000 - ((cyWorld - minY) / spanY) * 1000;
+                    const labelBg = _createSvgEl('rect');
+                    labelBg.setAttribute('x', String(cx - 20));
+                    labelBg.setAttribute('y', String(cy - 16));
+                    labelBg.setAttribute('width', '40');
+                    labelBg.setAttribute('height', '14');
+                    labelBg.setAttribute('rx', '4');
+                    labelBg.setAttribute('fill', 'rgba(2,6,23,0.72)');
+                    svg.appendChild(labelBg);
+
+                    const label = _createSvgEl('text');
+                    label.setAttribute('x', String(cx));
+                    label.setAttribute('y', String(cy - 6));
+                    label.setAttribute('text-anchor', 'middle');
+                    label.setAttribute('fill', '#fff');
+                    label.setAttribute('font-size', '10');
+                    label.setAttribute('font-weight', '700');
+                    label.textContent = entityId;
+                    svg.appendChild(label);
+                }
+            }
+        });
+
+        if (renderCount === 0) {
+            status.innerText = '未匹配到可叠加对象';
+            return;
+        }
+        status.innerText = `已高亮 ${validIds.length} 个对象`;
     }
 
     function renderList(elId, items, formatter, maxItems, emptyText) {
@@ -1164,6 +1431,8 @@
             }
         }
 
+        const focusEntities = hasSelection ? Array.from(linked.individuals) : [];
+        renderBevEntityOverlay(focusEntities);
         updateFlowLinkHint(slowdownLinkSelection);
     }
 
@@ -1283,6 +1552,8 @@
         hideDone();
         currentGovernanceIndex = data.index;
         const task = data.task;
+        currentFrameId = String(task.frame_id || '');
+        currentFocusEntities = [];
         const slowdownLevel = String(task.slowdown_level || task.risk_level || 'low').toUpperCase();
         const slowdownScore = task.slowdown_score ?? task.risk_score ?? 0;
         const slowdownClass = task.slowdown_class_label || task.slowdown_class || 'unknown';
@@ -1293,6 +1564,7 @@
             `score ${slowdownScore} · ${slowdownClass}`
         );
         setImages(data.img_path, data.schematic_path);
+        setBevOverlayData(data.bev_overlay || null);
 
         const selectedRun = governanceState && governanceState.selected_run
             ? governanceState.selected_run.split(/[\\/]/).pop()
@@ -1324,12 +1596,15 @@
 
         hideDone();
         currentRelationIndex = data.index;
+        currentFrameId = '';
+        currentFocusEntities = [];
         setBanner(
             `${data.task.subject || '-'} (${data.task.subject_type || '-'})`,
             data.task.relation || '-',
             `${data.task.object || '-'} (${data.task.object_type || '-'})`
         );
         setImages(data.img_path, data.schematic_path);
+        setBevOverlayData(null);
         clearSlowdownColumns();
         document.getElementById('analysis-panel').classList.remove('show');
     }
@@ -1348,6 +1623,7 @@
     function switchMode(mode) {
         currentMode = mode;
         updateModeButtons();
+        applyBevRenderMode(true);
         fetchStates().then(() => loadCardByMode());
     }
 
@@ -1532,33 +1808,43 @@
 
     function toggleZoom(idx, event) {
         const wrapper = event.currentTarget;
-        const img = wrapper.querySelector('img.preview');
+        const zoomLayers = wrapper.querySelectorAll('.zoom-layer');
         isZoomed[idx] = !isZoomed[idx];
 
         if (isZoomed[idx]) {
             wrapper.classList.add('zoomed');
-            img.style.transition = 'transform 0.15s ease';
-            img.style.transform = 'scale(3)';
+            zoomLayers.forEach(layer => {
+                layer.style.transition = 'transform 0.15s ease';
+                layer.style.transform = 'scale(3)';
+            });
             panZoom(idx, event);
             setTimeout(() => {
-                if (isZoomed[idx]) img.style.transition = 'none';
+                if (isZoomed[idx]) {
+                    zoomLayers.forEach(layer => {
+                        layer.style.transition = 'none';
+                    });
+                }
             }, 150);
         } else {
             wrapper.classList.remove('zoomed');
-            img.style.transition = 'transform 0.15s ease';
-            img.style.transform = 'scale(1)';
-            img.style.transformOrigin = 'center center';
+            zoomLayers.forEach(layer => {
+                layer.style.transition = 'transform 0.15s ease';
+                layer.style.transform = 'scale(1)';
+                layer.style.transformOrigin = 'center center';
+            });
         }
     }
 
     function panZoom(idx, event) {
         if (!isZoomed[idx]) return;
         const wrapper = event.currentTarget;
-        const img = wrapper.querySelector('img.preview');
+        const zoomLayers = wrapper.querySelectorAll('.zoom-layer');
         const rect = wrapper.getBoundingClientRect();
         const xPercent = ((event.clientX - rect.left) / rect.width) * 100;
         const yPercent = ((event.clientY - rect.top) / rect.height) * 100;
-        img.style.transformOrigin = `${xPercent}% ${yPercent}%`;
+        zoomLayers.forEach(layer => {
+            layer.style.transformOrigin = `${xPercent}% ${yPercent}%`;
+        });
     }
 
     function resetZoom(idx, event) {
@@ -1569,12 +1855,11 @@
         isZoomed = [false, false];
         document.querySelectorAll('.image-wrapper').forEach(wrapper => {
             wrapper.classList.remove('zoomed');
-            const img = wrapper.querySelector('img.preview');
-            if (img) {
-                img.style.transition = 'none';
-                img.style.transform = 'scale(1)';
-                img.style.transformOrigin = 'center center';
-            }
+            wrapper.querySelectorAll('.zoom-layer').forEach(layer => {
+                layer.style.transition = 'none';
+                layer.style.transform = 'scale(1)';
+                layer.style.transformOrigin = 'center center';
+            });
         });
     }
 
@@ -1623,6 +1908,17 @@
         updateModeButtons();
         setupPolling();
         await loadCardByMode();
+        updateBevRenderModeBadge();
+
+        const bevImg = document.getElementById('img-schematic');
+        bevImg.addEventListener('error', () => {
+            if (!dynamicBevEnabled) return;
+            dynamicBevEnabled = false;
+            const toggle = document.getElementById('toggle-dynamic-bev');
+            if (toggle) toggle.checked = false;
+            applyBevRenderMode(true);
+            alert('动态 BEV 渲染失败，已自动切回静态 BEV。请检查后端日志或 matplotlib 依赖。');
+        });
     };
 </script>
 </body>
