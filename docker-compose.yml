@@ -1,0 +1,24 @@
+services:
+  governance-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: traffic-governance-web:latest
+    container_name: traffic-governance-web
+    ports:
+      - "5000:5000"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "5000"
+      FLASK_DEBUG: "0"
+    volumes:
+      - ./DairV2X_SceneGraph_Validator/web_config.json:/app/DairV2X_SceneGraph_Validator/web_config.json
+      - ./DairV2X_SceneGraph_Validator/governance_validation_index.json:/app/DairV2X_SceneGraph_Validator/governance_validation_index.json
+      - ./DairV2X_SceneGraph_Validator/validation_index.json:/app/DairV2X_SceneGraph_Validator/validation_index.json
+      - ./traffic_agent_system/outputs:/app/traffic_agent_system/outputs
+    restart: unless-stopped
+
+# If your datasets are on host machine, you can add mounts like below:
+#      - d:/Research/Project2/infrastructure/data/infrastructure-side/scene_graph_results:/data/scene_graph_results:ro
+#      - d:/Research/Project2/infrastructure/data/infrastructure-side/intersection_vis_results:/data/intersection_vis_results:ro
+#      - d:/Research/Project2/dairv2xspd/dairv2xspd/frames:/data/frames:ro

@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 import threading
-from collections import deque
+from collections import Counter, deque
 from datetime import datetime
 from typing import Any, Deque, Dict, List, Optional
 
@@ -830,6 +830,159 @@ def _stop_pipeline() -> Dict[str, Any]:
         return {"success": False, "message": str(exc)}
 
 
+def _build_showcase_payload() -> Dict[str, Any]:
+    selected_run = _normalize_path(gov_meta.get("selected_run", ""))
+    summary = gov_meta.get("summary", {}) if isinstance(gov_meta.get("summary"), dict) else {}
+
+    total = len(gov_index_data)
+    pending = sum(1 for item in gov_index_data if item.get("status") == "pending")
+    assessed = total - pending
+
+    level_counter: Counter = Counter()
+    class_counter: Counter = Counter()
+    cause_counter: Counter = Counter()
+    source_type_counter: Counter = Counter()
+    source_weight_map: Dict[str, Dict[str, Any]] = {}
+    frame_rows: List[Dict[str, Any]] = []
+    score_series: List[Dict[str, Any]] = []
+
+    for row in gov_index_data:
+        frame_id = str(row.get("frame_id", "")).strip()
+        slowdown_level = str(row.get("slowdown_level", row.get("risk_level", "low"))).lower()
+        slowdown_class = str(row.get("slowdown_class", "normal_controlled_queue")).strip()
+        slowdown_score = int(row.get("slowdown_score", row.get("risk_score", 0)) or 0)
+
+        level_counter.update([slowdown_level])
+        class_counter.update([slowdown_class])
+
+        for cause in row.get("dominant_causes", []) or []:
+            cause_counter.update([str(cause)])
+
+        slowdown_objects = row.get("slowdown_objects", []) or []
+        for obj in slowdown_objects:
+            if not isinstance(obj, dict):
+                continue
+            source_type_counter.update([str(obj.get("source_type", "unknown"))])
+
+        source_summary = row.get("slowdown_source_summary", {}) or {}
+        weighted = source_summary.get("source_weighted_ranking", [])
+        if not isinstance(weighted, list) or not weighted:
+            weighted = [{"entity": src, "weight": 1.0, "object_type": "UNKNOWN"} for src in (row.get("slowdown_source_entities", []) or [])]
+
+        seen_source_in_frame: set = set()
+        for item in weighted:
+            if not isinstance(item, dict):
+                continue
+            entity = str(item.get("entity", "")).strip()
+            if not entity:
+                continue
+            weight = float(item.get("weight", 1.0) or 1.0)
+            object_type = str(item.get("object_type", "UNKNOWN") or "UNKNOWN").upper()
+
+            holder = source_weight_map.setdefault(
+                entity,
+                {
+                    "entity": entity,
+                    "total_weight": 0.0,
+                    "frame_count": 0,
+                    "object_type": object_type,
+                    "max_weight": 0.0,
+                },
+            )
+            holder["total_weight"] += weight
+            holder["max_weight"] = max(float(holder["max_weight"]), weight)
+            if holder.get("object_type", "UNKNOWN") == "UNKNOWN" and object_type != "UNKNOWN":
+                holder["object_type"] = object_type
+
+            if entity not in seen_source_in_frame:
+                holder["frame_count"] += 1
+                seen_source_in_frame.add(entity)
+
+        assets = row.get("assets", {}) or {}
+        frame_rows.append(
+            {
+                "frame_id": frame_id,
+                "slowdown_score": slowdown_score,
+                "slowdown_level": slowdown_level,
+                "slowdown_class": slowdown_class,
+                "slowdown_class_label": row.get("slowdown_class_label", slowdown_class),
+                "source_entities": row.get("slowdown_source_entities", []) or [],
+                "object_count": int(row.get("slowdown_object_count", 0) or 0),
+                "dominant_causes": row.get("dominant_causes", []) or [],
+                "raw_image": assets.get("raw_image", ""),
+                "bev_image": assets.get("bev_image", ""),
+            }
+        )
+
+        score_series.append(
+            {
+                "frame_id": frame_id,
+                "score": slowdown_score,
+                "level": slowdown_level,
+                "class": slowdown_class,
+            }
+        )
+
+    leaderboard = sorted(
+        source_weight_map.values(),
+        key=lambda item: (-float(item.get("total_weight", 0.0)), -int(item.get("frame_count", 0)), str(item.get("entity", ""))),
+    )
+
+    frame_rows = sorted(
+        frame_rows,
+        key=lambda item: (-int(item.get("slowdown_score", 0)), str(item.get("frame_id", ""))),
+    )
+    score_series = sorted(score_series, key=lambda item: str(item.get("frame_id", "")))
+
+    last_run_time = _iso_mtime(selected_run) if selected_run and os.path.exists(selected_run) else ""
+    selected_run_name = os.path.basename(selected_run) if selected_run else ""
+
+    return {
+        "meta": {
+            "selected_run": selected_run,
+            "selected_run_name": selected_run_name,
+            "last_run_time": last_run_time,
+            "total": total,
+            "pending": pending,
+            "assessed": assessed,
+            "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        },
+        "summary": summary,
+        "distributions": {
+            "slowdown_levels": {
+                "high": int(level_counter.get("high", 0)),
+                "medium": int(level_counter.get("medium", 0)),
+                "low": int(level_counter.get("low", 0)),
+            },
+            "slowdown_classes": dict(sorted(class_counter.items(), key=lambda item: item[0])),
+            "dominant_causes": dict(cause_counter.most_common(12)),
+            "source_types": dict(source_type_counter.most_common(8)),
+        },
+        "leaderboard": {
+            "source_weighted": [
+                {
+                    "entity": str(item.get("entity", "")),
+                    "total_weight": round(float(item.get("total_weight", 0.0)), 3),
+                    "frame_count": int(item.get("frame_count", 0)),
+                    "object_type": str(item.get("object_type", "UNKNOWN")),
+                    "max_weight": round(float(item.get("max_weight", 0.0)), 3),
+                }
+                for item in leaderboard[:20]
+            ]
+        },
+        "top_frames": frame_rows[:36],
+        "score_series": score_series[:240],
+        "pipeline_config": {
+            "following_filter_enabled": bool(config.get("pipeline_following_filter_enabled", True)),
+            "following_require_same_lane": bool(config.get("pipeline_following_require_same_lane", True)),
+            "following_min_longitudinal_gap": float(config.get("pipeline_following_min_longitudinal_gap", 1.5)),
+            "following_max_longitudinal_gap": float(config.get("pipeline_following_max_longitudinal_gap", 35.0)),
+            "following_max_lateral_offset": float(config.get("pipeline_following_max_lateral_offset", 3.2)),
+            "following_min_heading_cos": float(config.get("pipeline_following_min_heading_cos", 0.35)),
+        },
+    }
+
+
 # 初始化加载索引
 build_or_load_index()
 build_or_load_governance_index()
@@ -839,6 +992,11 @@ build_or_load_governance_index()
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/showcase")
+def showcase():
+    return render_template("showcase.html")
 
 
 @app.route("/api/state", methods=["GET"])
@@ -991,6 +1149,12 @@ def get_governance_state():
     )
 
 
+@app.route("/api/showcase/data", methods=["GET"])
+def get_showcase_data():
+    build_or_load_governance_index(force_rebuild=False)
+    return jsonify(_build_showcase_payload())
+
+
 @app.route("/api/governance/select_run", methods=["POST"])
 def select_governance_run():
     data = request.json or {}
@@ -1081,10 +1245,14 @@ def serve_image():
 
 
 if __name__ == "__main__":
+    host = str(os.environ.get("HOST", "0.0.0.0") or "0.0.0.0")
+    port = _as_int(os.environ.get("PORT", 5000), default=5000, minimum=1, maximum=65535)
+    debug = _as_bool(os.environ.get("FLASK_DEBUG", False), default=False)
+
     print("====================================")
     print("DairV2X Scene Graph 校对系统已启动")
     print("主功能: 治理运行与可视化审阅")
     print("次功能: 关系校对")
-    print("请打开: http://127.0.0.1:5000")
+    print(f"请打开: http://{host}:{port}")
     print("====================================")
-    app.run(debug=True, port=5000)
+    app.run(host=host, debug=debug, port=port)

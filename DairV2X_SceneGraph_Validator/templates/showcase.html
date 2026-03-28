@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Traffic Slowdown Showcase</title>
+    <style>
+        :root {
+            --bg: #f4f0e8;
+            --ink: #18212f;
+            --muted: #596273;
+            --line: #d9cfbf;
+            --accent-a: #f97316;
+            --accent-b: #0f766e;
+            --accent-c: #facc15;
+            --card: #fffaf1;
+            --danger: #d92d20;
+            --mid: #ca8a04;
+            --safe: #15803d;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at 20% 15%, #ffe6c7 0%, transparent 40%),
+                radial-gradient(circle at 85% 10%, #c8eee8 0%, transparent 38%),
+                linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+            min-height: 100vh;
+        }
+
+        .layout {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 22px 16px 30px;
+        }
+
+        .hero {
+            position: relative;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: linear-gradient(120deg, #fff8eb 0%, #fffdf8 55%, #f4fffc 100%);
+            padding: 18px 20px;
+            overflow: hidden;
+            box-shadow: 0 14px 28px rgba(24, 33, 47, 0.08);
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            width: 220px;
+            height: 220px;
+            right: -80px;
+            top: -90px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(249, 115, 22, 0.25) 0%, rgba(249, 115, 22, 0) 70%);
+            pointer-events: none;
+        }
+
+        .hero-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .title {
+            font-size: 30px;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+            margin: 0;
+        }
+
+        .subtitle {
+            margin: 8px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #ffffff;
+            color: var(--ink);
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .btn.primary {
+            border-color: #fb923c;
+            background: linear-gradient(120deg, #ffedd5 0%, #fff7ed 100%);
+        }
+
+        .meta-row {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .meta-item {
+            border: 1px solid var(--line);
+            background: var(--card);
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        .meta-label {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .meta-value {
+            font-size: 22px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .grid {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 12px;
+        }
+
+        .panel {
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: rgba(255, 253, 248, 0.95);
+            box-shadow: 0 10px 18px rgba(24, 33, 47, 0.06);
+        }
+
+        .panel h2 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 800;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--line);
+            padding: 12px 14px;
+        }
+
+        .panel-body {
+            padding: 12px 14px;
+        }
+
+        .bars {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .bar {
+            display: grid;
+            grid-template-columns: 110px 1fr 44px;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .bar-name {
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .bar-track {
+            height: 10px;
+            background: #ece6d8;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            transition: width 0.35s ease;
+        }
+
+        .bar-fill.high {
+            background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .bar-fill.medium {
+            background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .bar-fill.low {
+            background: linear-gradient(90deg, #10b981 0%, #15803d 100%);
+        }
+
+        .bar-fill.neutral {
+            background: linear-gradient(90deg, #14b8a6 0%, #0f766e 100%);
+        }
+
+        .bar-value {
+            font-size: 12px;
+            text-align: right;
+            font-weight: 700;
+            color: var(--ink);
+        }
+
+        .leaderboard {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .leaderboard th,
+        .leaderboard td {
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--line);
+            font-size: 12px;
+            text-align: left;
+        }
+
+        .leaderboard th {
+            color: var(--muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.2px;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            border: 1px solid var(--line);
+            background: #ffffff;
+        }
+
+        .tag.truck {
+            border-color: #fb923c;
+            background: #fff7ed;
+            color: #9a3412;
+        }
+
+        .tag.non-motor {
+            border-color: #86efac;
+            background: #f0fdf4;
+            color: #166534;
+        }
+
+        .timeline-wrap {
+            padding: 2px;
+            overflow: hidden;
+        }
+
+        .timeline {
+            width: 100%;
+            height: 190px;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #ffffff 0%, #fff7ea 100%);
+            border: 1px solid var(--line);
+        }
+
+        .frames {
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .frame-card {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        .frame-head {
+            padding: 8px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            background: #fffaf0;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .frame-id {
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .score {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--accent-b);
+        }
+
+        .frame-body {
+            padding: 8px 10px 10px;
+        }
+
+        .kv {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 4px 0;
+            font-size: 12px;
+        }
+
+        .thumb-row {
+            margin-top: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+
+        .thumb {
+            height: 82px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f4f4f5;
+            border: 1px solid var(--line);
+            position: relative;
+        }
+
+        .thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .thumb a {
+            position: absolute;
+            right: 6px;
+            bottom: 6px;
+            font-size: 11px;
+            text-decoration: none;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.92);
+            color: #111827;
+            border: 1px solid #e5e7eb;
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        @media (max-width: 1060px) {
+            .meta-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            .frames {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 700px) {
+            .title {
+                font-size: 22px;
+            }
+            .frames {
+                grid-template-columns: 1fr;
+            }
+            .bar {
+                grid-template-columns: 92px 1fr 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="layout">
+    <section class="hero">
+        <div class="hero-top">
+            <div>
+                <h1 class="title">Slowdown Showcase</h1>
+                <p class="subtitle" id="run-info">加载中...</p>
+            </div>
+            <div class="actions">
+                <a class="btn" href="/">返回主界面</a>
+                <button class="btn primary" id="refresh-btn">刷新数据</button>
+            </div>
+        </div>
+        <div class="meta-row">
+            <div class="meta-item">
+                <div class="meta-label">Processed</div>
+                <div class="meta-value" id="meta-total">0</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-label">Assessed</div>
+                <div class="meta-value" id="meta-assessed">0</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-label">Pending</div>
+                <div class="meta-value" id="meta-pending">0</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-label">Top Source</div>
+                <div class="meta-value" id="meta-top-source">-</div>
+            </div>
+        </div>
+    </section>
+
+    <div class="grid">
+        <section class="panel">
+            <div class="panel-header">
+                <h2>缓行等级与类型分布</h2>
+                <span class="muted" id="dist-note"></span>
+            </div>
+            <div class="panel-body">
+                <div class="bars" id="level-bars"></div>
+                <div style="height: 8px"></div>
+                <div class="bars" id="class-bars"></div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <h2>拥堵源加权榜</h2>
+                <span class="muted">按累计权重排序</span>
+            </div>
+            <div class="panel-body">
+                <table class="leaderboard">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Source</th>
+                            <th>Type</th>
+                            <th>Weight</th>
+                            <th>Frames</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-body"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <div class="grid" style="margin-top: 12px;">
+        <section class="panel">
+            <div class="panel-header">
+                <h2>缓行评分时间线</h2>
+                <span class="muted" id="timeline-note"></span>
+            </div>
+            <div class="panel-body timeline-wrap">
+                <svg class="timeline" id="timeline-svg" viewBox="0 0 1000 190" preserveAspectRatio="none"></svg>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <h2>关键原因统计</h2>
+                <span class="muted">Top 8</span>
+            </div>
+            <div class="panel-body">
+                <div class="bars" id="cause-bars"></div>
+            </div>
+        </section>
+    </div>
+
+    <section class="panel" style="margin-top: 12px;">
+        <div class="panel-header">
+            <h2>高分帧样例</h2>
+            <span class="muted">按 slowdown_score 排序</span>
+        </div>
+        <div class="panel-body">
+            <div class="frames" id="frames-grid"></div>
+        </div>
+    </section>
+</div>
+
+<script>
+    function fmtNumber(value) {
+        const n = Number(value || 0);
+        if (!Number.isFinite(n)) return "0";
+        return n.toLocaleString();
+    }
+
+    function levelLabel(key) {
+        if (key === "high") return "High";
+        if (key === "medium") return "Medium";
+        if (key === "low") return "Low";
+        return key;
+    }
+
+    function classLabel(key) {
+        const map = {
+            normal_controlled_queue: "Normal Controlled",
+            sustained_slowdown: "Sustained Slowdown",
+            anomalous_slowdown: "Anomalous Slowdown"
+        };
+        return map[key] || key;
+    }
+
+    function isTruckType(text) {
+        const t = String(text || "").toUpperCase();
+        return t.includes("TRUCK") || t.includes("FREIGHT") || t.includes("CARGO");
+    }
+
+    function isNonMotorType(text) {
+        const t = String(text || "").toUpperCase();
+        return t.includes("BICYCLE") || t.includes("CYCLIST") || t.includes("TRICYCLE") || t.includes("PERSON") || t.includes("PEDESTRIAN");
+    }
+
+    function renderBars(rootId, entries, colorResolver) {
+        const root = document.getElementById(rootId);
+        root.innerHTML = "";
+        const maxValue = Math.max(1, ...entries.map(item => Number(item.value || 0)));
+        entries.forEach(item => {
+            const row = document.createElement("div");
+            row.className = "bar";
+            const pct = Math.max(0, Math.min(100, (Number(item.value || 0) / maxValue) * 100));
+            row.innerHTML = `
+                <div class="bar-name">${item.label}</div>
+                <div class="bar-track"><div class="bar-fill ${colorResolver(item.key)}" style="width:${pct}%"></div></div>
+                <div class="bar-value">${fmtNumber(item.value)}</div>
+            `;
+            root.appendChild(row);
+        });
+    }
+
+    function renderLeaderboard(rows) {
+        const body = document.getElementById("leaderboard-body");
+        body.innerHTML = "";
+        if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="5" class="muted">暂无拥堵源数据</td></tr>';
+            return;
+        }
+
+        rows.slice(0, 12).forEach((row, idx) => {
+            const tr = document.createElement("tr");
+            let tagClass = "";
+            if (isTruckType(row.object_type)) tagClass = "truck";
+            else if (isNonMotorType(row.object_type)) tagClass = "non-motor";
+            tr.innerHTML = `
+                <td>${idx + 1}</td>
+                <td>${row.entity}</td>
+                <td><span class="tag ${tagClass}">${row.object_type || "UNKNOWN"}</span></td>
+                <td>${Number(row.total_weight || 0).toFixed(2)}</td>
+                <td>${fmtNumber(row.frame_count)}</td>
+            `;
+            body.appendChild(tr);
+        });
+    }
+
+    function renderTimeline(series) {
+        const svg = document.getElementById("timeline-svg");
+        const note = document.getElementById("timeline-note");
+        svg.innerHTML = "";
+
+        if (!series.length) {
+            note.textContent = "暂无时间线数据";
+            return;
+        }
+
+        note.textContent = `样本帧: ${series.length}`;
+        const width = 1000;
+        const height = 190;
+        const padX = 22;
+        const padY = 18;
+
+        const maxScore = Math.max(1, ...series.map(item => Number(item.score || 0)));
+        const points = series.map((item, idx) => {
+            const x = padX + (idx / Math.max(1, series.length - 1)) * (width - padX * 2);
+            const y = height - padY - ((Number(item.score || 0) / maxScore) * (height - padY * 2));
+            return { x, y, item };
+        });
+
+        const grid = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        for (let i = 0; i <= 4; i++) {
+            const y = padY + (i / 4) * (height - padY * 2);
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", String(padX));
+            line.setAttribute("y1", String(y));
+            line.setAttribute("x2", String(width - padX));
+            line.setAttribute("y2", String(y));
+            line.setAttribute("stroke", "#d7ccbb");
+            line.setAttribute("stroke-width", "1");
+            grid.appendChild(line);
+        }
+        svg.appendChild(grid);
+
+        const areaPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        const linePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+
+        const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+        const areaD = `${pathD} L${points[points.length - 1].x},${height - padY} L${points[0].x},${height - padY} Z`;
+
+        areaPath.setAttribute("d", areaD);
+        areaPath.setAttribute("fill", "rgba(249, 115, 22, 0.18)");
+        areaPath.setAttribute("stroke", "none");
+
+        linePath.setAttribute("d", pathD);
+        linePath.setAttribute("fill", "none");
+        linePath.setAttribute("stroke", "#ea580c");
+        linePath.setAttribute("stroke-width", "2.5");
+
+        svg.appendChild(areaPath);
+        svg.appendChild(linePath);
+
+        points.forEach((p, idx) => {
+            if (idx % Math.max(1, Math.floor(points.length / 24)) !== 0) return;
+            const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            dot.setAttribute("cx", String(p.x));
+            dot.setAttribute("cy", String(p.y));
+            dot.setAttribute("r", "2.4");
+            dot.setAttribute("fill", "#0f766e");
+            svg.appendChild(dot);
+        });
+    }
+
+    function renderFrames(frames) {
+        const root = document.getElementById("frames-grid");
+        root.innerHTML = "";
+        if (!frames.length) {
+            root.innerHTML = '<div class="muted">暂无帧数据</div>';
+            return;
+        }
+
+        frames.slice(0, 18).forEach(frame => {
+            const card = document.createElement("article");
+            card.className = "frame-card";
+            const causes = (frame.dominant_causes || []).slice(0, 2).join(" / ") || "-";
+            const source = (frame.source_entities || []).slice(0, 2).join(", ") || "-";
+            const rawSrc = frame.raw_image ? `/api/image?path=${encodeURIComponent(frame.raw_image)}` : "";
+            const bevSrc = frame.bev_image ? `/api/image?path=${encodeURIComponent(frame.bev_image)}` : "";
+
+            card.innerHTML = `
+                <div class="frame-head">
+                    <div class="frame-id">Frame ${frame.frame_id}</div>
+                    <div class="score">Score ${frame.slowdown_score}</div>
+                </div>
+                <div class="frame-body">
+                    <div class="kv"><span>Class</span><strong>${frame.slowdown_class_label || frame.slowdown_class}</strong></div>
+                    <div class="kv"><span>Sources</span><strong>${source}</strong></div>
+                    <div class="kv"><span>Causes</span><strong>${causes}</strong></div>
+                    <div class="thumb-row">
+                        <div class="thumb">
+                            ${rawSrc ? `<img loading="lazy" src="${rawSrc}" alt="raw">` : ""}
+                            ${rawSrc ? `<a target="_blank" href="${rawSrc}">Raw</a>` : ""}
+                        </div>
+                        <div class="thumb">
+                            ${bevSrc ? `<img loading="lazy" src="${bevSrc}" alt="bev">` : ""}
+                            ${bevSrc ? `<a target="_blank" href="${bevSrc}">BEV</a>` : ""}
+                        </div>
+                    </div>
+                </div>
+            `;
+            root.appendChild(card);
+        });
+    }
+
+    function render(data) {
+        const meta = data.meta || {};
+        const dist = data.distributions || {};
+        const levels = dist.slowdown_levels || {};
+        const classes = dist.slowdown_classes || {};
+        const causes = dist.dominant_causes || {};
+        const sourceRows = ((data.leaderboard || {}).source_weighted || []);
+        const topSource = sourceRows.length ? sourceRows[0].entity : "-";
+
+        document.getElementById("run-info").textContent = `${meta.selected_run_name || "未选择运行"} · 最近更新时间 ${meta.last_run_time || "-"}`;
+        document.getElementById("meta-total").textContent = fmtNumber(meta.total);
+        document.getElementById("meta-assessed").textContent = fmtNumber(meta.assessed);
+        document.getElementById("meta-pending").textContent = fmtNumber(meta.pending);
+        document.getElementById("meta-top-source").textContent = topSource;
+        document.getElementById("dist-note").textContent = `生成时间 ${meta.generated_at || "-"}`;
+
+        renderBars("level-bars", [
+            { key: "high", label: "High", value: levels.high || 0 },
+            { key: "medium", label: "Medium", value: levels.medium || 0 },
+            { key: "low", label: "Low", value: levels.low || 0 },
+        ], key => key);
+
+        const classEntries = Object.keys(classes)
+            .map(key => ({ key, label: classLabel(key), value: classes[key] }))
+            .sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
+        renderBars("class-bars", classEntries, () => "neutral");
+
+        const causeEntries = Object.keys(causes)
+            .map(key => ({ key, label: key, value: causes[key] }))
+            .slice(0, 8);
+        renderBars("cause-bars", causeEntries, () => "neutral");
+
+        renderLeaderboard(sourceRows);
+        renderTimeline(data.score_series || []);
+        renderFrames(data.top_frames || []);
+    }
+
+    async function loadData() {
+        const response = await fetch("/api/showcase/data", { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        render(data);
+    }
+
+    async function boot() {
+        const btn = document.getElementById("refresh-btn");
+        btn.addEventListener("click", () => loadData().catch(err => alert(`刷新失败: ${err.message}`)));
+        await loadData();
+        setInterval(() => {
+            loadData().catch(() => {});
+        }, 30000);
+    }
+
+    boot().catch(err => {
+        alert(`展示页加载失败: ${err.message}`);
+    });
+</script>
+</body>
+</html>
