@@ -6,13 +6,13 @@
 
 Temporal Graph Governance 是一个面向车路协同场景的交通治理与可解释审阅项目。项目将场景图推理、缓行风险分析、可视化审阅与运行编排整合到同一工作流中，支持研究验证、策略迭代和工程落地。
 
-本仓库中的 github_upload_package 是用于发布和交付的集成包，包含核心分析系统与审阅控制台。
+本仓库是用于发布和交付的集成包，包含核心分析系统与审阅控制台。
 
 ## Project Overview (EN)
 
 Temporal Graph Governance is an integrated toolkit for traffic governance in V2X scenarios. It combines scene-graph reasoning, slowdown risk analysis, visual review, and run orchestration in one workflow for research, iteration, and deployment.
 
-The github_upload_package directory is the distributable bundle that contains both the analysis engine and the review console.
+This snapshot is the distributable bundle that contains both the analysis engine and the review console.
 
 ---
 
@@ -214,4 +214,4 @@ Dynamic BEV requires:
 
 ## License / 许可
 
-如需对外发布，请根据你的组织规范补充许可证文件与第三方依赖声明。
+
