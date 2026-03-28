@@ -214,4 +214,7 @@ Dynamic BEV requires:
 
 ## License / 许可
 
+This project is open-sourced under the **MIT License**.
+
+See the `LICENSE` file for details.
 
