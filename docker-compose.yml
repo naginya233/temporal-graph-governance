@@ -16,6 +16,7 @@ services:
       - ./DairV2X_SceneGraph_Validator/governance_validation_index.json:/app/DairV2X_SceneGraph_Validator/governance_validation_index.json
       - ./DairV2X_SceneGraph_Validator/validation_index.json:/app/DairV2X_SceneGraph_Validator/validation_index.json
       - ./traffic_agent_system/outputs:/app/traffic_agent_system/outputs
+      - /data/mydata/datasets/20260328_migrate:/data/mydata/datasets/20260328_migrate:ro
     restart: unless-stopped
 
 # If your datasets are on host machine, you can add mounts like below:
