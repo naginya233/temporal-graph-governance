@@ -187,6 +187,12 @@
             background: linear-gradient(120deg, #ffedd5 0%, #fff7ed 100%);
         }
 
+        [data-theme="dark"] .btn.primary {
+            border-color: #ffb074;
+            background: linear-gradient(120deg, #8f3d08 0%, #b45309 100%);
+            color: #fff7ed;
+        }
+
         .meta-row {
             margin-top: 14px;
             display: grid;
