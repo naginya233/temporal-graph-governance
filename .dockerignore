@@ -11,8 +11,8 @@ traffic_agent_system/__pycache__/
 traffic_agent_system/outputs/
 traffic_agent_system/outputs_*/
 
-DairV2X_SceneGraph_Validator/__pycache__/
-DairV2X_SceneGraph_Validator/logs/
+traffic_scene_validator/__pycache__/
+traffic_scene_validator/logs/
 
 *.jsonl
 *.heapsnapshot

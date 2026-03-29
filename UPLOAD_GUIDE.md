@@ -22,5 +22,5 @@ git push -u origin main
 ## 3) Verify after push
 
 - `README.md` renders correctly.
-- `traffic_agent_system/` and `DairV2X_SceneGraph_Validator/` are present.
+- `traffic_agent_system/` and `traffic_scene_validator/` are present.
 - Runtime outputs/config files are not tracked.

@@ -135,10 +135,10 @@ Specify asset directories explicitly if needed:
 python pipeline.py \
 	--data-dir d:/Research/Project2/infrastructure/data/infrastructure-side/scene_graph_results \
 	--bev-dir d:/Research/Project2/infrastructure/data/infrastructure-side/intersection_vis_results \
-	--raw-image-dir d:/Research/Project2/dairv2xspd/dairv2xspd/frames \
-	--label-virtuallidar-dir d:/Research/Project2/dairv2xspd/dairv2xspd/label/virtuallidar \
-	--label-camera-dir d:/Research/Project2/dairv2xspd/dairv2xspd/label/camera \
-	--calib-virtuallidar-to-world-dir d:/Research/Project2/dairv2xspd/dairv2xspd/calib/virtuallidar_to_world \
+	--raw-image-dir d:/Research/Project2/traffic_dataset/traffic_dataset/frames \
+	--label-virtuallidar-dir d:/Research/Project2/traffic_dataset/traffic_dataset/label/virtuallidar \
+	--label-camera-dir d:/Research/Project2/traffic_dataset/traffic_dataset/label/camera \
+	--calib-virtuallidar-to-world-dir d:/Research/Project2/traffic_dataset/traffic_dataset/calib/virtuallidar_to_world \
 	--max-frames 20
 ```
 

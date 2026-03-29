@@ -30,20 +30,20 @@ def _default_governance_outputs_dir() -> str:
     return os.path.normpath(os.path.join(_default_traffic_system_dir(), "outputs"))
 
 
-def _default_dair_root_dir() -> str:
-    return os.path.normpath(os.path.join(BASE_DIR, "..", "..", "dairv2xspd", "dairv2xspd"))
+def _default_dataset_root_dir() -> str:
+    return os.path.normpath(os.path.join(BASE_DIR, "..", "..", "traffic_dataset", "traffic_dataset"))
 
 
 def _default_label_virtuallidar_dir() -> str:
-    return os.path.normpath(os.path.join(_default_dair_root_dir(), "label", "virtuallidar"))
+    return os.path.normpath(os.path.join(_default_dataset_root_dir(), "label", "virtuallidar"))
 
 
 def _default_label_camera_dir() -> str:
-    return os.path.normpath(os.path.join(_default_dair_root_dir(), "label", "camera"))
+    return os.path.normpath(os.path.join(_default_dataset_root_dir(), "label", "camera"))
 
 
 def _default_calib_virtuallidar_to_world_dir() -> str:
-    return os.path.normpath(os.path.join(_default_dair_root_dir(), "calib", "virtuallidar_to_world"))
+    return os.path.normpath(os.path.join(_default_dataset_root_dir(), "calib", "virtuallidar_to_world"))
 
 
 def _default_map_elements_dir() -> str:
@@ -2553,7 +2553,7 @@ if __name__ == "__main__":
     debug = _as_bool(os.environ.get("FLASK_DEBUG", False), default=False)
 
     print("====================================")
-    print("DairV2X Scene Graph 校对系统已启动")
+    print("TrafficDataset Scene Graph 校对系统已启动")
     print("主功能: 治理运行与可视化审阅")
     print("次功能: 关系校对")
     print(f"请打开: http://{host}:{port}")

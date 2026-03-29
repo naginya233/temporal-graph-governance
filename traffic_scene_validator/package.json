@@ -1,5 +1,5 @@
 {
-  "name": "dairv2x-validator-e2e",
+  "name": "traffic-validator-e2e",
   "private": true,
   "type": "module",
   "scripts": {

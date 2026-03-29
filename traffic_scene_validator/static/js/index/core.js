@@ -39,7 +39,7 @@
     let panRafId = [0, 0];
     let panPendingOrigin = [null, null];
 
-    const UI_PREFS_KEY = 'dair_console_ui_prefs_v1';
+    const UI_PREFS_KEY = 'traffic_console_ui_prefs_v1';
     let uiPrefs = {
         theme: 'system',
         density: 'comfortable',

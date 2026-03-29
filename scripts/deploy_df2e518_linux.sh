@@ -177,7 +177,7 @@ log "installing dependencies"
 "$PIP_BIN" install -r "$INSTALL_DIR/requirements.txt" gunicorn
 
 log "running syntax check"
-"$PY_BIN" -m py_compile "$INSTALL_DIR/DairV2X_SceneGraph_Validator/app.py"
+"$PY_BIN" -m py_compile "$INSTALL_DIR/traffic_scene_validator/app.py"
 
 if [ "$SKIP_TESTS" != "1" ]; then
   log "running unit tests"
@@ -202,7 +202,7 @@ cat > "$INSTALL_DIR/run_web.sh" <<'EOF'
 set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT_DIR/.edge.env"
-exec "$ROOT_DIR/.venv/bin/gunicorn" -w 2 -b "${HOST}:${PORT}" DairV2X_SceneGraph_Validator.app:app
+exec "$ROOT_DIR/.venv/bin/gunicorn" -w 2 -b "${HOST}:${PORT}" traffic_scene_validator.app:app
 EOF
 chmod +x "$INSTALL_DIR/run_web.sh"
 
@@ -223,7 +223,7 @@ User=${run_user}
 Group=${run_group}
 WorkingDirectory=${INSTALL_DIR}
 EnvironmentFile=${INSTALL_DIR}/.edge.env
-ExecStart=${INSTALL_DIR}/.venv/bin/gunicorn -w 2 -b \${HOST}:\${PORT} DairV2X_SceneGraph_Validator.app:app
+ExecStart=${INSTALL_DIR}/.venv/bin/gunicorn -w 2 -b \${HOST}:\${PORT} traffic_scene_validator.app:app
 Restart=always
 RestartSec=3
 

@@ -11,7 +11,7 @@ WORKDIR /app
 
 COPY requirements.txt ./requirements.txt
 COPY traffic_agent_system/requirements.txt ./traffic_agent_system/requirements.txt
-COPY DairV2X_SceneGraph_Validator/requirements.txt ./DairV2X_SceneGraph_Validator/requirements.txt
+COPY traffic_scene_validator/requirements.txt ./traffic_scene_validator/requirements.txt
 
 RUN python -m pip install --upgrade pip \
     && python -m pip install -r requirements.txt
@@ -20,4 +20,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["python", "DairV2X_SceneGraph_Validator/app.py"]
+CMD ["python", "traffic_scene_validator/app.py"]

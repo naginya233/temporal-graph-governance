@@ -3,11 +3,11 @@ name: playwright-smoke
 on:
   push:
     paths:
-      - "DairV2X_SceneGraph_Validator/**"
+      - "traffic_scene_validator/**"
       - ".github/workflows/playwright-smoke.yml"
   pull_request:
     paths:
-      - "DairV2X_SceneGraph_Validator/**"
+      - "traffic_scene_validator/**"
       - ".github/workflows/playwright-smoke.yml"
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: DairV2X_SceneGraph_Validator
+        working-directory: traffic_scene_validator
 
     steps:
       - name: Checkout
@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: DairV2X_SceneGraph_Validator/package-lock.json
+          cache-dependency-path: traffic_scene_validator/package-lock.json
 
       - name: Install Node deps
         run: npm install
@@ -54,5 +54,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: DairV2X_SceneGraph_Validator/playwright-report/
+          path: traffic_scene_validator/playwright-report/
           if-no-files-found: ignore

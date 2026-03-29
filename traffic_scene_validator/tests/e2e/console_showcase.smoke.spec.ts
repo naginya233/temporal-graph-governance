@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("console and showcase smoke", async ({ page, context }) => {
   await page.goto("/");
-  await expect(page).toHaveTitle(/DairV2X/);
+  await expect(page).toHaveTitle(/TrafficDataset/);
 
   await page.getByRole("button", { name: "关系校对次功能" }).click();
   await expect(page.locator("#progress-text")).toContainText("关系校对");
@@ -20,7 +20,7 @@ test("console and showcase smoke", async ({ page, context }) => {
   await page.locator("#ui-performance-select").selectOption("rich");
 
   const prefs = await page.evaluate(() => {
-    return JSON.parse(localStorage.getItem("dair_console_ui_prefs_v1") || "{}");
+    return JSON.parse(localStorage.getItem("traffic_console_ui_prefs_v1") || "{}");
   });
   expect(prefs.theme).toBe("dark");
   expect(prefs.performanceMode).toBe("rich");

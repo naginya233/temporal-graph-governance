@@ -6,7 +6,7 @@
   "common": {
     "data_dir": "d:/Research/Project2/infrastructure/data/infrastructure-side/scene_graph_results",
     "bev_dir": "d:/Research/Project2/infrastructure/data/infrastructure-side/intersection_vis_results",
-    "raw_image_dir": "d:/Research/Project2/dairv2xspd/dairv2xspd/frames",
+    "raw_image_dir": "d:/Research/Project2/traffic_dataset/traffic_dataset/frames",
     "max_frames": 500,
     "model": "qwen3-vl:4b",
     "no_report": false

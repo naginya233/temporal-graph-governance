@@ -1,2 +1,2 @@
 -r traffic_agent_system/requirements.txt
--r DairV2X_SceneGraph_Validator/requirements.txt
+-r traffic_scene_validator/requirements.txt

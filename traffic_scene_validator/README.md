@@ -1,4 +1,4 @@
-# DairV2X 治理主控台
+# TrafficDataset 治理主控台
 
 该工具已整合两部分能力：
 
@@ -85,7 +85,7 @@ python app.py
 
 ## E2E 冒烟回归 (Playwright)
 
-在 `DairV2X_SceneGraph_Validator` 目录执行：
+在 `traffic_scene_validator` 目录执行：
 
 ```bash
 npm install

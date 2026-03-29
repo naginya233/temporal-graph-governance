@@ -10,7 +10,7 @@ Temporal Graph Governance 是一个面向车路协同场景的交通治理与可
 
 ## Project Overview (EN)
 
-Temporal Graph Governance is an integrated toolkit for traffic governance in V2X scenarios. It combines scene-graph reasoning, slowdown risk analysis, visual review, and run orchestration in one workflow for research, iteration, and deployment.
+Temporal Graph Governance is an integrated toolkit for traffic governance in ConnectedRoadside scenarios. It combines scene-graph reasoning, slowdown risk analysis, visual review, and run orchestration in one workflow for research, iteration, and deployment.
 
 This snapshot is the distributable bundle that contains both the analysis engine and the review console.
 
@@ -21,7 +21,7 @@ This snapshot is the distributable bundle that contains both the analysis engine
 1. traffic_agent_system
    场景图交通治理流水线，负责事件分析、风险评估与报告产出。
 
-2. DairV2X_SceneGraph_Validator
+2. traffic_scene_validator
    治理审阅优先的 Web 控制台，支持运行管线、查看日志、审核结果与关系校对。
 
 ## Components (EN)
@@ -29,7 +29,7 @@ This snapshot is the distributable bundle that contains both the analysis engine
 1. traffic_agent_system
    Core pipeline for scene-graph traffic governance, risk scoring, and report generation.
 
-2. DairV2X_SceneGraph_Validator
+2. traffic_scene_validator
    Governance-first web console for pipeline control, live logs, result review, and relation validation.
 
 ---
@@ -55,7 +55,7 @@ This snapshot is the distributable bundle that contains both the analysis engine
 ## 目录结构 (CN)
 
 - traffic_agent_system/: 治理流水线主工程。
-- DairV2X_SceneGraph_Validator/: Web 服务与可视化审阅前后端。
+- traffic_scene_validator/: Web 服务与可视化审阅前后端。
 - requirements.txt: 根依赖入口。
 - Dockerfile, docker-compose.yml: 容器化部署文件。
 - UPLOAD_GUIDE.md: 上传与发布说明。
@@ -63,7 +63,7 @@ This snapshot is the distributable bundle that contains both the analysis engine
 ## Repository Layout (EN)
 
 - traffic_agent_system/: governance pipeline implementation.
-- DairV2X_SceneGraph_Validator/: web app and visualization backend/frontend.
+- traffic_scene_validator/: web app and visualization backend/frontend.
 - requirements.txt: top-level dependency list.
 - Dockerfile, docker-compose.yml: container deployment files.
 - UPLOAD_GUIDE.md: upload and release notes.
@@ -84,7 +84,7 @@ python -m pip install -r requirements.txt
 ### 2) 启动 Web 控制台
 
 ```bash
-cd DairV2X_SceneGraph_Validator
+cd traffic_scene_validator
 python app.py
 ```
 
@@ -111,7 +111,7 @@ python -m pip install -r requirements.txt
 ### 2) Start the web console
 
 ```bash
-cd DairV2X_SceneGraph_Validator
+cd traffic_scene_validator
 python app.py
 ```
 

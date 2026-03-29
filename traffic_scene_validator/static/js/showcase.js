@@ -1,4 +1,4 @@
-    const UI_PREFS_KEY = "dair_console_ui_prefs_v1";
+    const UI_PREFS_KEY = "traffic_console_ui_prefs_v1";
 
     function normalizeShowcasePrefs(raw) {
         const source = raw && typeof raw === "object" ? raw : {};

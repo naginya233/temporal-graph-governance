@@ -253,22 +253,22 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--raw-image-dir",
-        default=r"d:\Research\Project2\dairv2xspd\dairv2xspd\frames",
+        default=r"d:\Research\Project2\traffic_dataset\traffic_dataset\frames",
         help="Directory that contains raw *.jpg files",
     )
     parser.add_argument(
         "--label-virtuallidar-dir",
-        default=r"d:\Research\Project2\dairv2xspd\dairv2xspd\label\virtuallidar",
+        default=r"d:\Research\Project2\traffic_dataset\traffic_dataset\label\virtuallidar",
         help="Directory for per-frame label/virtuallidar json files",
     )
     parser.add_argument(
         "--label-camera-dir",
-        default=r"d:\Research\Project2\dairv2xspd\dairv2xspd\label\camera",
+        default=r"d:\Research\Project2\traffic_dataset\traffic_dataset\label\camera",
         help="Directory for per-frame label/camera json files (fallback)",
     )
     parser.add_argument(
         "--calib-virtuallidar-to-world-dir",
-        default=r"d:\Research\Project2\dairv2xspd\dairv2xspd\calib\virtuallidar_to_world",
+        default=r"d:\Research\Project2\traffic_dataset\traffic_dataset\calib\virtuallidar_to_world",
         help="Directory for per-frame calib/virtuallidar_to_world json files",
     )
     parser.add_argument(
