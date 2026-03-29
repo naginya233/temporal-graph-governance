@@ -180,6 +180,13 @@ Dynamic BEV requires:
 
 ---
 
+## 演示材料 / Demo Material
+
+- 缓行评分演示文档（10 个典型场景对照表）:
+   [docs/slowdown_scoring_demo.md](docs/slowdown_scoring_demo.md)
+
+---
+
 ## 常见问题 (CN)
 
 1. 启动失败提示 No module named flask

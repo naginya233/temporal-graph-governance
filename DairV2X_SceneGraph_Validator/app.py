@@ -275,7 +275,8 @@ def _extract_slowdown_from_event(event_analysis: Dict[str, Any]) -> Dict[str, An
     if not isinstance(event_analysis, dict):
         return {}
 
-    for key in ("slowdown", "risk", "calibrated_slowdown", "calibrated_risk", "raw_slowdown", "raw_risk"):
+    # 统一展示口径为 raw（未时序校准）分数。
+    for key in ("raw_slowdown", "raw_risk", "slowdown", "risk", "calibrated_slowdown", "calibrated_risk"):
         payload = event_analysis.get(key)
         if isinstance(payload, dict):
             return payload

@@ -156,6 +156,7 @@ class TrafficGovernancePipeline:
                 event_analysis["raw_risk"] = calibration_result["raw_risk"]
                 event_analysis["risk"] = calibration_result["calibrated_risk"]
                 event_analysis["temporal_features"] = calibration_result["temporal_features"]
+
                 governance_report += (
                     "\n[时序一致性校准] "
                     f"raw={calibration_result['raw_slowdown'].get('level', 'unknown')}({calibration_result['raw_slowdown'].get('score', 0)}) -> "
@@ -163,6 +164,7 @@ class TrafficGovernancePipeline:
                     f"persistent={calibration_result['temporal_features']['persistent_edge_count']}, "
                     f"transient={calibration_result['temporal_features']['transient_edge_count']}"
                 )
+                event_analysis["report"] = governance_report
 
             slowdown = event_analysis.get("slowdown") or event_analysis.get("risk") or {}
             slowdown_level = str(slowdown.get("level", "low")).lower()
