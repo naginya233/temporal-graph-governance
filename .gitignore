@@ -36,3 +36,8 @@ DairV2X_SceneGraph_Validator/governance_validation_index.json
 
 # Git metadata from source folder copy
 DairV2X_SceneGraph_Validator/.git/
+
+# Playwright artifacts
+DairV2X_SceneGraph_Validator/node_modules/
+DairV2X_SceneGraph_Validator/playwright-report/
+DairV2X_SceneGraph_Validator/test-results/

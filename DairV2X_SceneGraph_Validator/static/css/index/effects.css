@@ -1,0 +1,143 @@
+.action-bar {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .shortcut {
+            margin-left: 6px;
+            opacity: 0.8;
+            font-size: 12px;
+        }
+
+        .done {
+            display: none;
+            text-align: center;
+            padding: 40px 16px;
+        }
+
+        .done.show { display: block; }
+
+        .done h2 {
+            margin: 0;
+            font-size: 27px;
+        }
+
+        .done p {
+            color: var(--muted);
+            margin-top: 6px;
+            font-weight: 700;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1200;
+            background: rgba(15, 23, 42, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal {
+            width: min(760px, 96vw);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: var(--soft);
+            padding: 16px;
+            transform: scale(0.97);
+            transition: transform 0.2s ease;
+            backdrop-filter: blur(var(--blur-modal));
+            -webkit-backdrop-filter: blur(var(--blur-modal));
+            box-shadow: 0 30px 58px -30px rgba(15, 23, 42, 0.7);
+        }
+
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+
+        .modal h3 {
+            margin: 0 0 10px 0;
+            font-size: 20px;
+        }
+
+        .field-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .modal-actions {
+            margin-top: 12px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-modal {
+            border: none;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .btn-modal.primary { background: var(--primary); color: #fff; }
+        .btn-modal.secondary { background: #e9edf4; color: #1d1d1f; }
+
+        [data-theme="dark"] .btn-modal.secondary {
+            background: rgba(154, 164, 186, 0.18);
+            color: var(--surface-ink);
+        }
+
+        [data-density="compact"] header { padding: 10px 14px; }
+        [data-density="compact"] main { padding: 12px; gap: 10px; }
+        [data-density="compact"] .panel { padding: 10px; }
+        [data-density="compact"] .meta-row,
+        [data-density="compact"] .flow-grid,
+        [data-density="compact"] .pipeline-form,
+        [data-density="compact"] .pedestrian-stats { gap: 8px; }
+        [data-density="compact"] .btn { padding: 7px 11px; }
+        [data-density="compact"] .field input,
+        [data-density="compact"] .field select { padding: 7px 8px; }
+        [data-density="compact"] .flow-item { padding: 5px 7px; }
+
+        [data-motion="off"] *,
+        [data-motion="off"] *::before,
+        [data-motion="off"] *::after {
+            animation: none !important;
+            transition: none !important;
+            scroll-behavior: auto !important;
+        }
+
+        .btn-modal {
+            transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .btn-modal:hover {
+            transform: translateY(-1px);
+        }
+
+        @media (max-width: 1180px) {
+            .pipeline-panel { grid-template-columns: 1fr; }
+            .pipeline-form { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+            .workspace { grid-template-columns: 1fr; }
+            .meta-row { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+            header { padding: 12px 12px; }
+            main { padding: 12px; }
+            .flow-grid { grid-template-columns: 1fr; }
+            .pedestrian-stats { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+        }
+    
+

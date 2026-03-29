@@ -82,3 +82,36 @@ python app.py
 
 - 本工具只消费场景图及其下游产物，不改动视觉到场景图生成链路。
 - 治理运行采用后端异步执行，页面可持续查看运行日志与状态。
+
+## E2E 冒烟回归 (Playwright)
+
+在 `DairV2X_SceneGraph_Validator` 目录执行：
+
+```bash
+npm install
+npx playwright install chromium
+```
+
+运行主控台 + showcase 冒烟：
+
+```bash
+npm run test:e2e:smoke
+```
+
+可选：运行本地“启动/停止管线”流程回归（默认跳过，需显式开启）：
+
+PowerShell:
+
+```powershell
+$env:RUN_PIPELINE_FLOW='1'
+npm run test:e2e:pipeline
+```
+
+说明：若本地 Python 命令不是 `python`，可通过环境变量覆盖：
+
+PowerShell:
+
+```powershell
+$env:PYTHON_CMD='d:/Research/Project2/.venv/bin/python.exe'
+npm run test:e2e:smoke
+```

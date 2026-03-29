@@ -1,0 +1,13 @@
+{
+  "name": "dairv2x-validator-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test tests/e2e/console_showcase.smoke.spec.ts",
+    "test:e2e:pipeline": "playwright test tests/e2e/pipeline_start_stop.local.spec.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2"
+  }
+}
