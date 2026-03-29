@@ -405,6 +405,103 @@
             flex-wrap: wrap;
         }
 
+        .analysis-tabs {
+            margin-top: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 4px;
+            background: #f8fafc;
+        }
+
+        .analysis-tab {
+            border: none;
+            border-radius: 999px;
+            background: transparent;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 800;
+            padding: 6px 12px;
+            cursor: pointer;
+        }
+
+        .analysis-tab.active {
+            background: #0f766e;
+            color: #ffffff;
+        }
+
+        .pedestrian-panel {
+            display: none;
+            margin-top: 10px;
+        }
+
+        .pedestrian-stats {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .ped-window-control {
+            margin-bottom: 10px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #f8fafc;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .ped-window-control label {
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .ped-window-control input[type="range"] {
+            flex: 1 1 280px;
+        }
+
+        .ped-window-control input[type="number"] {
+            width: 90px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 6px 8px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .ped-threshold-label {
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .pedestrian-stat {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #f8fafc;
+            padding: 8px;
+        }
+
+        .pedestrian-stat-label {
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .pedestrian-stat-value {
+            margin-top: 4px;
+            font-size: 20px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
         .chips {
             display: flex;
             flex-wrap: wrap;
@@ -655,6 +752,7 @@
             header { padding: 12px 12px; }
             main { padding: 12px; }
             .flow-grid { grid-template-columns: 1fr; }
+            .pedestrian-stats { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
         }
     </style>
 </head>
@@ -775,21 +873,81 @@
                 <div class="chips" id="cause-chips"></div>
             </div>
         </div>
-        <div class="flow-grid" id="flow-grid">
-            <div class="flow-col">
-                <div class="flow-title">车流对象</div>
-                <div class="flow-list" id="flow-objects-list"></div>
-            </div>
-            <div class="flow-col">
-                <div class="flow-title">个体</div>
-                <div class="flow-list" id="flow-individuals-list"></div>
-            </div>
-            <div class="flow-col">
-                <div class="flow-title">源头</div>
-                <div class="flow-list" id="flow-sources-list"></div>
-            </div>
+        <div class="analysis-tabs" id="analysis-domain-tabs">
+            <button id="tab-vehicle" class="analysis-tab active" onclick="switchAnalysisTab('vehicle')">车辆缓行</button>
+            <button id="tab-pedestrian" class="analysis-tab" onclick="switchAnalysisTab('pedestrian')">行人过街</button>
         </div>
-        <div class="flow-empty" id="flow-link-hint">点击任一对象/个体/源头可联动高亮，再次点击取消。</div>
+        <div id="vehicle-analysis-panel">
+            <div class="flow-grid" id="flow-grid">
+                <div class="flow-col">
+                    <div class="flow-title" id="flow-objects-title">车辆缓行对象</div>
+                    <div class="flow-list" id="flow-objects-list"></div>
+                </div>
+                <div class="flow-col">
+                    <div class="flow-title" id="flow-individuals-title">车辆个体</div>
+                    <div class="flow-list" id="flow-individuals-list"></div>
+                </div>
+                <div class="flow-col">
+                    <div class="flow-title" id="flow-sources-title">车辆源头</div>
+                    <div class="flow-list" id="flow-sources-list"></div>
+                </div>
+            </div>
+            <div class="flow-empty" id="flow-link-hint">点击任一对象/个体/源头可联动高亮，再次点击取消。</div>
+        </div>
+        <div class="pedestrian-panel" id="pedestrian-analysis-panel">
+            <div class="ped-window-control">
+                <label for="ped-window-slider">滑动窗口帧数: <span id="ped-window-value">60</span></label>
+                <input type="range" id="ped-window-slider" min="5" max="300" step="1" value="60"
+                    oninput="onPedestrianWindowRangeInput(this.value)"
+                    onchange="onPedestrianWindowRangeChange(this.value)">
+                <input type="number" id="ped-window-input" min="5" max="5000" step="1" value="60"
+                    onchange="onPedestrianWindowNumberChange(this.value)">
+                <span class="ped-threshold-label">繁忙阈值</span>
+                <input type="number" id="ped-busy-input" min="1" max="5000" step="1" value="8"
+                    onchange="onPedestrianBusyThresholdChange(this.value)">
+                <span class="ped-threshold-label">饱和阈值</span>
+                <input type="number" id="ped-saturated-input" min="2" max="10000" step="1" value="14"
+                    onchange="onPedestrianSaturatedThresholdChange(this.value)">
+            </div>
+            <div class="pedestrian-stats">
+                <div class="pedestrian-stat">
+                    <div class="pedestrian-stat-label">过街状态</div>
+                    <div class="pedestrian-stat-value" id="ped-level">-</div>
+                </div>
+                <div class="pedestrian-stat">
+                    <div class="pedestrian-stat-label">窗口事件数</div>
+                    <div class="pedestrian-stat-value" id="ped-events">0</div>
+                </div>
+                <div class="pedestrian-stat">
+                    <div class="pedestrian-stat-label">窗口唯一个体</div>
+                    <div class="pedestrian-stat-value" id="ped-unique">0</div>
+                </div>
+                <div class="pedestrian-stat">
+                    <div class="pedestrian-stat-label">当前过街个体</div>
+                    <div class="pedestrian-stat-value" id="ped-active">0</div>
+                </div>
+            </div>
+            <div class="pipeline-actions">
+                <button class="btn soft" onclick="jumpPedestrianFrame('prev', true)">上一帧有数据</button>
+                <button class="btn primary" onclick="jumpPedestrianFrame('next', true)">下一帧有数据</button>
+                <button class="btn ok" onclick="jumpPedestrianFrame('next', false)">下一帧(全部)</button>
+            </div>
+            <div class="flow-grid">
+                <div class="flow-col">
+                    <div class="flow-title">当前过街行人</div>
+                    <div class="flow-list" id="ped-active-entities"></div>
+                </div>
+                <div class="flow-col">
+                    <div class="flow-title">新触发行人</div>
+                    <div class="flow-list" id="ped-new-entities"></div>
+                </div>
+                <div class="flow-col">
+                    <div class="flow-title">过街目标</div>
+                    <div class="flow-list" id="ped-targets"></div>
+                </div>
+            </div>
+            <div class="flow-empty" id="ped-insight">暂无行人过街统计。</div>
+        </div>
         <pre id="governance-report">治理报告显示区域</pre>
         <pre id="governance-llm" style="display:none;"></pre>
     </div>
@@ -857,6 +1015,12 @@
     let currentBevOverlay = null;
     let slowdownLinkSelection = null;
     let slowdownLinkContext = null;
+    let currentAnalysisTab = 'vehicle';
+    let pedestrianCrossingSummary = null;
+    let pedestrianSelectedEntity = '';
+    let pedestrianWindowFrames = 60;
+    let pedestrianBusyThreshold = 8;
+    let pedestrianSaturatedThreshold = 14;
     let isZoomed = [false, false];
     let pipelinePolling = null;
     let lastPipelineRunning = false;
@@ -909,23 +1073,36 @@
     }
 
     function updateUndoButton() {
-        const canUndo = currentMode === 'governance' ? governanceHistory.length > 0 : relationHistory.length > 0;
+        const canUndo = currentMode === 'governance'
+            ? (currentAnalysisTab !== 'pedestrian' && governanceHistory.length > 0)
+            : relationHistory.length > 0;
         document.getElementById('btn-undo').disabled = !canUndo;
     }
 
     function setActionLabels() {
         const neg = document.getElementById('btn-negative');
+        const skip = document.getElementById('btn-skip');
         const pos = document.getElementById('btn-positive');
         const panel = document.getElementById('analysis-panel');
         const pipelinePanel = document.getElementById('pipeline-panel');
+        const undo = document.getElementById('btn-undo');
 
         if (currentMode === 'governance') {
-            neg.innerHTML = '缓行存疑<span class="shortcut">(N)</span>';
-            pos.innerHTML = '确认缓行<span class="shortcut">(Y)</span>';
+            if (currentAnalysisTab === 'pedestrian') {
+                neg.innerHTML = '上一帧有数据<span class="shortcut">(N)</span>';
+                skip.innerHTML = '下一帧有数据<span class="shortcut">(S)</span>';
+                pos.innerHTML = '下一帧(全部)<span class="shortcut">(Y)</span>';
+                undo.disabled = true;
+            } else {
+                neg.innerHTML = '缓行存疑<span class="shortcut">(N)</span>';
+                skip.innerHTML = '跳过<span class="shortcut">(S)</span>';
+                pos.innerHTML = '确认缓行<span class="shortcut">(Y)</span>';
+            }
             panel.classList.add('show');
             pipelinePanel.style.display = 'block';
         } else {
             neg.innerHTML = '错误<span class="shortcut">(N)</span>';
+            skip.innerHTML = '跳过<span class="shortcut">(S)</span>';
             pos.innerHTML = '正确<span class="shortcut">(Y)</span>';
             panel.classList.remove('show');
             pipelinePanel.style.display = 'none';
@@ -1039,10 +1216,245 @@
         document.getElementById('flow-individuals-list').innerHTML = '<div class="flow-empty">暂无个体</div>';
         document.getElementById('flow-sources-list').innerHTML = '<div class="flow-empty">暂无源头</div>';
         document.getElementById('flow-link-hint').innerText = '点击任一对象/个体/源头可联动高亮，再次点击取消。';
+        document.getElementById('flow-objects-title').innerText = '车辆缓行对象';
+        document.getElementById('flow-individuals-title').innerText = '车辆个体';
+        document.getElementById('flow-sources-title').innerText = '车辆源头';
         currentFocusEntities = [];
         renderBevEntityOverlay([]);
         slowdownLinkSelection = null;
         slowdownLinkContext = null;
+        clearPedestrianPanel();
+        switchAnalysisTab('vehicle');
+    }
+
+    function updateAnalysisTabButtons() {
+        const tabVehicle = document.getElementById('tab-vehicle');
+        const tabPedestrian = document.getElementById('tab-pedestrian');
+        if (tabVehicle) tabVehicle.classList.toggle('active', currentAnalysisTab === 'vehicle');
+        if (tabPedestrian) tabPedestrian.classList.toggle('active', currentAnalysisTab === 'pedestrian');
+    }
+
+    function switchAnalysisTab(tab) {
+        currentAnalysisTab = tab === 'pedestrian' ? 'pedestrian' : 'vehicle';
+        updateAnalysisTabButtons();
+
+        const vehiclePanel = document.getElementById('vehicle-analysis-panel');
+        const pedestrianPanel = document.getElementById('pedestrian-analysis-panel');
+        if (!vehiclePanel || !pedestrianPanel) return;
+
+        const pedestrianMode = currentAnalysisTab === 'pedestrian';
+        vehiclePanel.style.display = pedestrianMode ? 'none' : 'block';
+        pedestrianPanel.style.display = pedestrianMode ? 'block' : 'none';
+
+        if (!pedestrianMode && slowdownLinkContext) {
+            renderSlowdownColumnsFromContext();
+        }
+
+        if (pedestrianMode && currentMode === 'governance') {
+            const summary = pedestrianCrossingSummary || {};
+            const hasPedData =
+                Number(summary.crossing_event_count || 0) > 0 ||
+                Number(summary.crossing_edge_count || 0) > 0 ||
+                Number(summary.active_crossing_count || 0) > 0;
+            if (!hasPedData && currentGovernanceIndex !== -1) {
+                document.getElementById('ped-insight').innerText = '当前帧无行人过街数据，正在定位下一帧有数据样本...';
+                jumpPedestrianFrame('next', true);
+            }
+        }
+
+        setActionLabels();
+        updateUndoButton();
+    }
+
+    function _pedLevelText(level) {
+        const value = String(level || '').toLowerCase();
+        if (value === 'saturated') return '饱和过街';
+        if (value === 'busy') return '繁忙过街';
+        return '正常过街';
+    }
+
+    function clearPedestrianPanel() {
+        pedestrianCrossingSummary = null;
+        pedestrianSelectedEntity = '';
+        const pedConfig = governanceState && governanceState.pedestrian_config ? governanceState.pedestrian_config : {};
+        setPedestrianWindowControls(
+            Number(pedConfig.window_frames || pedestrianWindowFrames),
+            Number(pedConfig.busy_threshold || pedestrianBusyThreshold),
+            Number(pedConfig.saturated_threshold || pedestrianSaturatedThreshold)
+        );
+        document.getElementById('ped-level').innerText = '-';
+        document.getElementById('ped-events').innerText = '0';
+        document.getElementById('ped-unique').innerText = '0';
+        document.getElementById('ped-active').innerText = '0';
+        document.getElementById('ped-active-entities').innerHTML = '<div class="flow-empty">暂无当前过街行人</div>';
+        document.getElementById('ped-new-entities').innerHTML = '<div class="flow-empty">暂无新触发行人</div>';
+        document.getElementById('ped-targets').innerHTML = '<div class="flow-empty">暂无过街目标</div>';
+        document.getElementById('ped-insight').innerText = '暂无行人过街统计。';
+        document.getElementById('tab-vehicle').innerText = '车辆缓行';
+        document.getElementById('tab-pedestrian').innerText = '行人过街';
+    }
+
+    function setPedestrianWindowControls(frames, busyThreshold = pedestrianBusyThreshold, saturatedThreshold = pedestrianSaturatedThreshold) {
+        const normalized = Math.max(5, Math.min(5000, Number(frames || 60)));
+        const normalizedBusy = Math.max(1, Math.min(5000, Number(busyThreshold || 8)));
+        const normalizedSaturated = Math.max(normalizedBusy + 1, Math.min(10000, Number(saturatedThreshold || 14)));
+
+        pedestrianWindowFrames = normalized;
+        pedestrianBusyThreshold = normalizedBusy;
+        pedestrianSaturatedThreshold = normalizedSaturated;
+
+        const slider = document.getElementById('ped-window-slider');
+        const input = document.getElementById('ped-window-input');
+        const label = document.getElementById('ped-window-value');
+        const busyInput = document.getElementById('ped-busy-input');
+        const saturatedInput = document.getElementById('ped-saturated-input');
+
+        if (slider) {
+            const sliderMax = 300;
+            slider.value = String(Math.max(5, Math.min(sliderMax, normalized)));
+        }
+        if (input) input.value = String(normalized);
+        if (label) label.innerText = String(normalized);
+        if (busyInput) busyInput.value = String(normalizedBusy);
+        if (saturatedInput) {
+            saturatedInput.min = String(normalizedBusy + 1);
+            saturatedInput.value = String(normalizedSaturated);
+        }
+    }
+
+    function onPedestrianWindowRangeInput(value) {
+        const v = Math.max(5, Math.min(5000, Number(value || 60)));
+        const label = document.getElementById('ped-window-value');
+        const input = document.getElementById('ped-window-input');
+        if (label) label.innerText = String(v);
+        if (input) input.value = String(v);
+    }
+
+    async function applyPedestrianWindowFrames(value, options = {}) {
+        const frames = Math.max(5, Math.min(5000, Number(value || 60)));
+        const busy = Math.max(1, Math.min(5000, Number(options.busyThreshold ?? pedestrianBusyThreshold)));
+        const saturated = Math.max(busy + 1, Math.min(10000, Number(options.saturatedThreshold ?? pedestrianSaturatedThreshold)));
+
+        if (!Number.isFinite(frames)) return;
+        if (!Number.isFinite(busy) || !Number.isFinite(saturated)) return;
+        if (frames === pedestrianWindowFrames && busy === pedestrianBusyThreshold && saturated === pedestrianSaturatedThreshold) return;
+
+        const previousWindow = pedestrianWindowFrames;
+        const previousBusy = pedestrianBusyThreshold;
+        const previousSaturated = pedestrianSaturatedThreshold;
+
+        try {
+            const updated = await apiPost('/api/governance/pedestrian_window', {
+                window_frames: frames,
+                busy_threshold: busy,
+                saturated_threshold: saturated,
+            });
+
+            setPedestrianWindowControls(
+                Number(updated.window_frames || frames),
+                Number(updated.busy_threshold || busy),
+                Number(updated.saturated_threshold || saturated)
+            );
+            await fetchStates();
+
+            if (currentMode === 'governance' && currentFrameId) {
+                const data = await apiGet(`/api/governance/frame?frame_id=${encodeURIComponent(currentFrameId)}`);
+                if (data && data.task) {
+                    renderGovernanceTaskCard(data);
+                    switchAnalysisTab('pedestrian');
+                    return;
+                }
+            }
+            await loadCardByMode();
+        } catch (err) {
+            alert(`更新行人窗口失败: ${err.message}`);
+            setPedestrianWindowControls(previousWindow, previousBusy, previousSaturated);
+        }
+    }
+
+    async function onPedestrianWindowRangeChange(value) {
+        await applyPedestrianWindowFrames(value);
+    }
+
+    async function onPedestrianWindowNumberChange(value) {
+        const frames = Math.max(5, Math.min(5000, Number(value || 60)));
+        await applyPedestrianWindowFrames(frames);
+    }
+
+    async function onPedestrianBusyThresholdChange(value) {
+        await applyPedestrianWindowFrames(pedestrianWindowFrames, {
+            busyThreshold: Number(value || pedestrianBusyThreshold),
+            saturatedThreshold: pedestrianSaturatedThreshold,
+        });
+    }
+
+    async function onPedestrianSaturatedThresholdChange(value) {
+        await applyPedestrianWindowFrames(pedestrianWindowFrames, {
+            busyThreshold: pedestrianBusyThreshold,
+            saturatedThreshold: Number(value || pedestrianSaturatedThreshold),
+        });
+    }
+
+    function togglePedestrianEntity(entity) {
+        const key = String(entity || '').trim();
+        if (!key) return;
+        pedestrianSelectedEntity = pedestrianSelectedEntity === key ? '' : key;
+        renderPedestrianSummary(pedestrianCrossingSummary || {});
+        const focus = pedestrianSelectedEntity ? [pedestrianSelectedEntity] : [];
+        renderBevEntityOverlay(focus);
+    }
+
+    function renderPedestrianEntityList(rootId, items, emptyText, clickable = false) {
+        const root = document.getElementById(rootId);
+        if (!root) return;
+        root.innerHTML = '';
+
+        const values = Array.isArray(items) ? items.map(v => String(v).trim()).filter(Boolean) : [];
+        if (values.length === 0) {
+            root.innerHTML = `<div class="flow-empty">${emptyText}</div>`;
+            return;
+        }
+
+        values.forEach((value, idx) => {
+            const div = document.createElement('div');
+            const activeClass = clickable && pedestrianSelectedEntity === value ? ' active' : '';
+            div.className = `flow-item${clickable ? ' clickable' : ''}${activeClass}`;
+            div.innerHTML = `<strong>${idx + 1}.</strong> ${value}`;
+            if (clickable) {
+                div.onclick = () => togglePedestrianEntity(value);
+            }
+            root.appendChild(div);
+        });
+    }
+
+    function renderPedestrianSummary(summary) {
+        const data = summary && typeof summary === 'object' ? summary : {};
+        const thresholds = data.thresholds && typeof data.thresholds === 'object' ? data.thresholds : {};
+        pedestrianCrossingSummary = data;
+        setPedestrianWindowControls(
+            Number(data.window_frames || pedestrianWindowFrames),
+            Number(thresholds.busy || pedestrianBusyThreshold),
+            Number(thresholds.saturated || pedestrianSaturatedThreshold)
+        );
+
+        const events = Number(data.crossing_event_count || 0);
+        const uniqueActive = Number(data.unique_active_pedestrian_count || 0);
+        const activeNow = Number(data.active_crossing_count || 0);
+        const level = _pedLevelText(data.saturation_level);
+
+        document.getElementById('ped-level').innerText = level;
+        document.getElementById('ped-events').innerText = String(events);
+        document.getElementById('ped-unique').innerText = String(uniqueActive);
+        document.getElementById('ped-active').innerText = String(activeNow);
+
+        renderPedestrianEntityList('ped-active-entities', data.active_entities, '暂无当前过街行人', true);
+        renderPedestrianEntityList('ped-new-entities', data.new_crossing_entities, '暂无新触发行人', true);
+        renderPedestrianEntityList('ped-targets', data.active_targets, '暂无过街目标', false);
+
+        const insight = String(data.insight || '暂无行人过街统计。').trim();
+        document.getElementById('ped-insight').innerText = insight || '暂无行人过街统计。';
+        document.getElementById('tab-pedestrian').innerText = `行人过街 (${events})`;
+        document.getElementById('tab-vehicle').innerText = '车辆缓行';
     }
 
     function _createSvgEl(name) {
@@ -1454,6 +1866,14 @@
         governanceState = gState;
         pipelineState = pState;
 
+        if (governanceState && governanceState.pedestrian_config) {
+            setPedestrianWindowControls(
+                Number(governanceState.pedestrian_config.window_frames || pedestrianWindowFrames),
+                Number(governanceState.pedestrian_config.busy_threshold || pedestrianBusyThreshold),
+                Number(governanceState.pedestrian_config.saturated_threshold || pedestrianSaturatedThreshold)
+            );
+        }
+
         if (refreshSettings || settingsModalOpen) {
             fillSettingsFields();
         }
@@ -1542,13 +1962,7 @@
         lastPipelineRunning = running;
     }
 
-    async function loadGovernanceCard() {
-        const data = await apiGet('/api/governance/next');
-        if (!data.task) {
-            showDone('治理审阅模式已全部完成。可以启动新运行后继续审阅。');
-            return;
-        }
-
+    function renderGovernanceTaskCard(data) {
         hideDone();
         currentGovernanceIndex = data.index;
         const task = data.task;
@@ -1573,6 +1987,8 @@
 
         renderCauseChips(task.dominant_causes || []);
         renderSlowdownColumns(task);
+        renderPedestrianSummary(task.pedestrian_crossing_summary || {});
+        switchAnalysisTab(currentAnalysisTab);
         document.getElementById('governance-report').innerText = task.governance_report || '暂无治理报告';
 
         const llmText = (task.llm_insight || '').trim();
@@ -1585,6 +2001,35 @@
             llmBox.innerText = '';
         }
         document.getElementById('analysis-panel').classList.add('show');
+    }
+
+    async function jumpPedestrianFrame(direction, onlyWithData) {
+        if (currentMode !== 'governance') return;
+        try {
+            const params = new URLSearchParams({
+                direction: String(direction || 'next'),
+                only_with_data: onlyWithData ? '1' : '0',
+                current_index: String(currentGovernanceIndex),
+            });
+            const data = await apiGet(`/api/governance/pedestrian_frame?${params.toString()}`);
+            if (!data.task) {
+                alert(data.message || '没有可切换的行人帧。');
+                return;
+            }
+            renderGovernanceTaskCard(data);
+            switchAnalysisTab('pedestrian');
+        } catch (err) {
+            alert(`行人帧切换失败: ${err.message}`);
+        }
+    }
+
+    async function loadGovernanceCard() {
+        const data = await apiGet('/api/governance/next');
+        if (!data.task) {
+            showDone('治理审阅模式已全部完成。可以启动新运行后继续审阅。');
+            return;
+        }
+        renderGovernanceTaskCard(data);
     }
 
     async function loadRelationCard() {
@@ -1645,6 +2090,10 @@
 
     async function handlePositive() {
         if (currentMode === 'governance') {
+            if (currentAnalysisTab === 'pedestrian') {
+                await jumpPedestrianFrame('next', false);
+                return;
+            }
             await submitGovernance('confirmed');
         } else {
             await submitRelation('correct');
@@ -1653,6 +2102,10 @@
 
     async function handleNegative() {
         if (currentMode === 'governance') {
+            if (currentAnalysisTab === 'pedestrian') {
+                await jumpPedestrianFrame('prev', true);
+                return;
+            }
             await submitGovernance('suspect');
         } else {
             await submitRelation('incorrect');
@@ -1661,6 +2114,10 @@
 
     async function handleSkip() {
         if (currentMode === 'governance') {
+            if (currentAnalysisTab === 'pedestrian') {
+                await jumpPedestrianFrame('next', true);
+                return;
+            }
             await submitGovernance('skip');
         } else {
             await submitRelation('skip');

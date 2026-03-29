@@ -79,6 +79,9 @@ config: Dict[str, Any] = {
     "pipeline_following_max_lateral_offset": 3.2,
     "pipeline_following_min_heading_cos": 0.35,
     "pipeline_following_require_same_lane": True,
+    "pipeline_pedestrian_window_frames": 60,
+    "pipeline_pedestrian_busy_threshold": 8,
+    "pipeline_pedestrian_saturated_threshold": 14,
 }
 
 TARGET_RELATIONS = [
@@ -392,6 +395,7 @@ def _extract_bev_overlay_from_scene_graph(scene_graph_path: str, fixed_world_bou
         return {"entity_polygons": {}, "world_bounds": {}}
 
     entity_polygons: Dict[str, List[List[List[float]]]] = {}
+    entity_types: Dict[str, str] = {}
     seen: Dict[str, set] = {}
     min_x = float("inf")
     max_x = float("-inf")
@@ -404,6 +408,10 @@ def _extract_bev_overlay_from_scene_graph(scene_graph_path: str, fixed_world_bou
         entity = str(item.get("subject", "")).strip()
         if not entity:
             continue
+
+        subject_type = str(item.get("subject_type", "")).strip().upper()
+        if subject_type and entity not in entity_types:
+            entity_types[entity] = subject_type
 
         meta = item.get("object_meta")
         polygon = meta.get("polygon") if isinstance(meta, dict) else None
@@ -463,6 +471,7 @@ def _extract_bev_overlay_from_scene_graph(scene_graph_path: str, fixed_world_bou
 
     return {
         "entity_polygons": entity_polygons,
+        "entity_types": entity_types,
         "world_bounds": world_bounds,
     }
 
@@ -557,6 +566,267 @@ def _object_type_key(raw_type: Any) -> str:
     if text in {"motorcycle", "motorcyclist", "motor"}:
         return "motorcycle"
     return "unknown"
+
+
+def _is_pedestrian_type(raw_type: Any) -> bool:
+    text = str(raw_type or "").strip().upper()
+    if not text:
+        return False
+    return any(token in text for token in ("PEDESTRIAN", "PERSON", "WALKER"))
+
+
+def _is_crossing_relation(raw_relation: Any) -> bool:
+    text = str(raw_relation or "").strip().lower()
+    if not text:
+        return False
+    if "cross" in text:
+        return True
+    return text in {
+        "walking_across",
+        "walk_across",
+        "on_crosswalk",
+        "in_crosswalk",
+        "entering_crosswalk",
+        "leaving_crosswalk",
+        "traversing_crosswalk",
+    }
+
+
+def _is_crossing_target_type(raw_type: Any) -> bool:
+    text = str(raw_type or "").strip().upper()
+    if not text:
+        return False
+    return any(token in text for token in ("CROSSWALK", "LANE", "JUNCTION", "ROAD"))
+
+
+def _is_crosswalk_target_type(raw_type: Any) -> bool:
+    text = str(raw_type or "").strip().upper()
+    if not text:
+        return False
+    return "CROSSWALK" in text
+
+
+def _extract_pedestrian_crossing_snapshot(scene_graph_path: str) -> Dict[str, Any]:
+    path = _normalize_path(scene_graph_path)
+    if not path or not os.path.exists(path):
+        return {
+            "entities": [],
+            "targets": [],
+            "edge_count": 0,
+        }
+
+    payload = _safe_read_json(path, {})
+    triples = payload.get("object_map_triples") if isinstance(payload, dict) else []
+    if not isinstance(triples, list):
+        return {
+            "entities": [],
+            "targets": [],
+            "edge_count": 0,
+        }
+
+    entities: set = set()
+    targets: set = set()
+    edge_count = 0
+
+    for triple in triples:
+        if not isinstance(triple, dict):
+            continue
+
+        subject = str(triple.get("subject", "")).strip()
+        if not subject:
+            continue
+
+        if not _is_pedestrian_type(triple.get("subject_type")):
+            continue
+
+        relation_text = str(triple.get("relation", "")).strip().lower()
+        relation_is_crossing = _is_crossing_relation(relation_text)
+        object_type = triple.get("object_type")
+
+        # 放宽规则：若行人在斑马线上（in/on/inside），也记为过街活动。
+        crosswalk_presence = relation_text in {"in", "on", "inside", "overlap", "intersect"} and _is_crosswalk_target_type(object_type)
+        if not (relation_is_crossing or crosswalk_presence):
+            continue
+
+        if relation_is_crossing and object_type and not _is_crossing_target_type(object_type):
+            continue
+
+        edge_count += 1
+        entities.add(subject)
+
+        target = str(triple.get("object", "")).strip()
+        if target:
+            targets.add(target)
+
+    return {
+        "entities": sorted(entities),
+        "targets": sorted(targets),
+        "edge_count": int(edge_count),
+    }
+
+
+def _pedestrian_saturation_level(events_in_window: int, busy_threshold: int, saturated_threshold: int) -> str:
+    if events_in_window >= saturated_threshold:
+        return "saturated"
+    if events_in_window >= busy_threshold:
+        return "busy"
+    return "normal"
+
+
+def _pedestrian_saturation_text(
+    level: str,
+    events_in_window: int,
+    window_frames: int,
+    busy_threshold: int,
+    saturated_threshold: int,
+) -> str:
+    if level == "saturated":
+        return (
+            f"近{window_frames}帧行人过街事件{events_in_window}次，超过饱和阈值{saturated_threshold}，"
+            f"判定为饱和过街。"
+        )
+    if level == "busy":
+        return (
+            f"近{window_frames}帧行人过街事件{events_in_window}次，达到繁忙阈值{busy_threshold}，"
+            f"判定为繁忙过街。"
+        )
+    return (
+        f"近{window_frames}帧行人过街事件{events_in_window}次，低于繁忙阈值{busy_threshold}，"
+        f"判定为正常过街。"
+    )
+
+
+def _attach_pedestrian_crossing_summaries(records: List[Dict[str, Any]]) -> None:
+    if not records:
+        return
+
+    window_frames = _as_int(config.get("pipeline_pedestrian_window_frames", 60), default=60, minimum=5, maximum=5000)
+    busy_threshold = _as_int(config.get("pipeline_pedestrian_busy_threshold", 8), default=8, minimum=1, maximum=5000)
+    saturated_threshold = _as_int(
+        config.get("pipeline_pedestrian_saturated_threshold", 14),
+        default=14,
+        minimum=max(2, busy_threshold + 1),
+        maximum=10000,
+    )
+
+    prev_active: set = set()
+    frame_queue: Deque[Dict[str, Any]] = deque()
+    active_counter: Counter = Counter()
+    event_counter: Counter = Counter()
+
+    window_event_count = 0
+    window_edge_count = 0
+
+    for row in records:
+        assets = row.get("assets", {}) if isinstance(row.get("assets"), dict) else {}
+        scene_graph_path = str(assets.get("scene_graph_json", ""))
+        snapshot = _extract_pedestrian_crossing_snapshot(scene_graph_path)
+
+        active_entities = set(str(item) for item in snapshot.get("entities", []) if str(item).strip())
+        active_targets = set(str(item) for item in snapshot.get("targets", []) if str(item).strip())
+        edge_count = int(snapshot.get("edge_count", 0) or 0)
+
+        new_event_entities = active_entities - prev_active
+        frame_entry = {
+            "active_entities": active_entities,
+            "new_event_entities": set(new_event_entities),
+            "edge_count": edge_count,
+        }
+
+        frame_queue.append(frame_entry)
+        window_event_count += len(new_event_entities)
+        window_edge_count += edge_count
+
+        for entity in active_entities:
+            active_counter[entity] += 1
+        for entity in new_event_entities:
+            event_counter[entity] += 1
+
+        while len(frame_queue) > window_frames:
+            expired = frame_queue.popleft()
+            expired_active = expired.get("active_entities", set())
+            expired_new = expired.get("new_event_entities", set())
+            expired_edge = int(expired.get("edge_count", 0) or 0)
+
+            window_event_count -= len(expired_new)
+            window_edge_count -= expired_edge
+
+            for entity in expired_active:
+                active_counter[entity] -= 1
+                if active_counter[entity] <= 0:
+                    active_counter.pop(entity, None)
+
+            for entity in expired_new:
+                event_counter[entity] -= 1
+                if event_counter[entity] <= 0:
+                    event_counter.pop(entity, None)
+
+        level = _pedestrian_saturation_level(
+            events_in_window=window_event_count,
+            busy_threshold=busy_threshold,
+            saturated_threshold=saturated_threshold,
+        )
+
+        row["pedestrian_crossing_summary"] = {
+            "window_frames": window_frames,
+            "crossing_event_count": int(window_event_count),
+            "crossing_edge_count": int(window_edge_count),
+            "unique_active_pedestrian_count": int(len(active_counter)),
+            "unique_event_pedestrian_count": int(len(event_counter)),
+            "active_crossing_count": int(len(active_entities)),
+            "active_entities": sorted(active_entities),
+            "active_targets": sorted(active_targets),
+            "new_crossing_entities": sorted(new_event_entities),
+            "saturation_level": level,
+            "thresholds": {
+                "busy": int(busy_threshold),
+                "saturated": int(saturated_threshold),
+            },
+            "insight": _pedestrian_saturation_text(
+                level=level,
+                events_in_window=window_event_count,
+                window_frames=window_frames,
+                busy_threshold=busy_threshold,
+                saturated_threshold=saturated_threshold,
+            ),
+        }
+
+        prev_active = active_entities
+
+
+def _pedestrian_summaries_need_refresh(records: List[Dict[str, Any]]) -> bool:
+    if not records:
+        return False
+
+    expected_window = _as_int(config.get("pipeline_pedestrian_window_frames", 60), default=60, minimum=5, maximum=5000)
+    expected_busy = _as_int(config.get("pipeline_pedestrian_busy_threshold", 8), default=8, minimum=1, maximum=5000)
+    expected_saturated = _as_int(
+        config.get("pipeline_pedestrian_saturated_threshold", 14),
+        default=14,
+        minimum=max(2, expected_busy + 1),
+        maximum=10000,
+    )
+
+    for row in records:
+        if not isinstance(row, dict):
+            return True
+
+        summary = row.get("pedestrian_crossing_summary")
+        if not isinstance(summary, dict):
+            return True
+
+        summary_window = _as_int(summary.get("window_frames", -1), default=-1, minimum=-1, maximum=5000)
+        thresholds_raw = summary.get("thresholds")
+        thresholds: Dict[str, Any] = thresholds_raw if isinstance(thresholds_raw, dict) else {}
+        summary_busy = _as_int(thresholds.get("busy", -1), default=-1, minimum=-1, maximum=10000)
+        summary_saturated = _as_int(thresholds.get("saturated", -1), default=-1, minimum=-1, maximum=10000)
+
+        if summary_window != expected_window:
+            return True
+        if summary_busy != expected_busy or summary_saturated != expected_saturated:
+            return True
+
+    return False
 
 
 def _as_polygon_points(raw_polygon: Any) -> List[List[float]]:
@@ -1168,6 +1438,14 @@ def _sync_pipeline_defaults() -> None:
     config["pipeline_following_max_lateral_offset"] = _as_float(config.get("pipeline_following_max_lateral_offset", 3.2), default=3.2, minimum=0.2, maximum=50.0)
     config["pipeline_following_min_heading_cos"] = _as_float(config.get("pipeline_following_min_heading_cos", 0.35), default=0.35, minimum=-1.0, maximum=1.0)
     config["pipeline_following_require_same_lane"] = _as_bool(config.get("pipeline_following_require_same_lane", True), default=True)
+    config["pipeline_pedestrian_window_frames"] = _as_int(config.get("pipeline_pedestrian_window_frames", 60), default=60, minimum=5, maximum=5000)
+    config["pipeline_pedestrian_busy_threshold"] = _as_int(config.get("pipeline_pedestrian_busy_threshold", 8), default=8, minimum=1, maximum=5000)
+    config["pipeline_pedestrian_saturated_threshold"] = _as_int(
+        config.get("pipeline_pedestrian_saturated_threshold", 14),
+        default=14,
+        minimum=max(2, int(config["pipeline_pedestrian_busy_threshold"]) + 1),
+        maximum=10000,
+    )
 
 
 
@@ -1266,6 +1544,11 @@ def build_or_load_governance_index(force_rebuild: bool = False) -> None:
                 and old_selected_run
                 and old_selected_run == _normalize_path(config.get("selected_run", ""))
             ):
+                refreshed = False
+                if _pedestrian_summaries_need_refresh(old_records):
+                    _attach_pedestrian_crossing_summaries(old_records)
+                    refreshed = True
+
                 gov_index_data = old_records
                 gov_meta = {
                     "runs": old_payload.get("runs", []),
@@ -1273,6 +1556,9 @@ def build_or_load_governance_index(force_rebuild: bool = False) -> None:
                     "summary": old_payload.get("summary", {}),
                     "event_segments": old_payload.get("event_segments", []),
                 }
+
+                if refreshed:
+                    save_governance_index()
                 return
 
             for r in old_records:
@@ -1380,6 +1666,8 @@ def build_or_load_governance_index(force_rebuild: bool = False) -> None:
                 )
     except Exception as exc:
         print(f"[!] 读取治理结果失败: {exc}")
+
+    _attach_pedestrian_crossing_summaries(parsed_records)
 
     parsed_records.sort(
         key=lambda r: (
@@ -1821,6 +2109,9 @@ def _build_showcase_payload() -> Dict[str, Any]:
             "following_max_longitudinal_gap": float(config.get("pipeline_following_max_longitudinal_gap", 35.0)),
             "following_max_lateral_offset": float(config.get("pipeline_following_max_lateral_offset", 3.2)),
             "following_min_heading_cos": float(config.get("pipeline_following_min_heading_cos", 0.35)),
+            "pedestrian_window_frames": int(config.get("pipeline_pedestrian_window_frames", 60)),
+            "pedestrian_busy_threshold": int(config.get("pipeline_pedestrian_busy_threshold", 8)),
+            "pedestrian_saturated_threshold": int(config.get("pipeline_pedestrian_saturated_threshold", 14)),
         },
     }
 
@@ -1914,6 +2205,12 @@ def update_config():
         config["pipeline_following_min_heading_cos"] = _as_float(data.get("pipeline_following_min_heading_cos"), default=0.35, minimum=-1.0, maximum=1.0)
     if "pipeline_following_require_same_lane" in data:
         config["pipeline_following_require_same_lane"] = _as_bool(data.get("pipeline_following_require_same_lane"), default=True)
+    if "pipeline_pedestrian_window_frames" in data:
+        config["pipeline_pedestrian_window_frames"] = _as_int(data.get("pipeline_pedestrian_window_frames"), default=60, minimum=5, maximum=5000)
+    if "pipeline_pedestrian_busy_threshold" in data:
+        config["pipeline_pedestrian_busy_threshold"] = _as_int(data.get("pipeline_pedestrian_busy_threshold"), default=8, minimum=1, maximum=5000)
+    if "pipeline_pedestrian_saturated_threshold" in data:
+        config["pipeline_pedestrian_saturated_threshold"] = _as_int(data.get("pipeline_pedestrian_saturated_threshold"), default=14, minimum=2, maximum=10000)
 
     _sync_pipeline_defaults()
     save_config()
@@ -1985,6 +2282,11 @@ def get_governance_state():
             "event_segments": gov_meta.get("event_segments", []),
             "slowdown_distribution": slowdown_distribution,
             "risk_distribution": slowdown_distribution,
+            "pedestrian_config": {
+                "window_frames": int(config.get("pipeline_pedestrian_window_frames", 60)),
+                "busy_threshold": int(config.get("pipeline_pedestrian_busy_threshold", 8)),
+                "saturated_threshold": int(config.get("pipeline_pedestrian_saturated_threshold", 14)),
+            },
             "summary_file": summary_path if summary_path and os.path.exists(summary_path) else "",
             "review_html": review_html if review_html and os.path.exists(review_html) else "",
         }
@@ -2020,27 +2322,149 @@ def rebuild_governance_index():
     return jsonify({"success": True})
 
 
+def _build_governance_task_payload(idx: int, record: Dict[str, Any]) -> Dict[str, Any]:
+    assets = record.get("assets", {}) if isinstance(record.get("assets"), dict) else {}
+    frame_id = str(record.get("frame_id", "")).strip()
+    fixed_bounds = _extract_world_bounds_from_map_elements(frame_id)
+    bev_overlay = _extract_bev_overlay_from_scene_graph(
+        assets.get("scene_graph_json", ""),
+        fixed_world_bounds=fixed_bounds,
+    )
+    return {
+        "task": record,
+        "index": idx,
+        "img_path": assets.get("raw_image", ""),
+        "schematic_path": assets.get("bev_image", ""),
+        "bev_overlay": bev_overlay,
+    }
+
+
+def _record_has_pedestrian_crossing_data(record: Dict[str, Any]) -> bool:
+    summary = record.get("pedestrian_crossing_summary", {})
+    if not isinstance(summary, dict):
+        return False
+
+    crossing_event_count = int(summary.get("crossing_event_count", 0) or 0)
+    crossing_edge_count = int(summary.get("crossing_edge_count", 0) or 0)
+    active_crossing_count = int(summary.get("active_crossing_count", 0) or 0)
+
+    return crossing_event_count > 0 or crossing_edge_count > 0 or active_crossing_count > 0
+
+
+def _pick_governance_index_for_navigation(
+    direction: str,
+    current_index: int,
+    only_with_pedestrian_data: bool,
+) -> Optional[int]:
+    if not gov_index_data:
+        return None
+
+    candidates: List[int] = []
+    for idx, record in enumerate(gov_index_data):
+        if only_with_pedestrian_data and not _record_has_pedestrian_crossing_data(record):
+            continue
+        candidates.append(idx)
+
+    if not candidates:
+        return None
+
+    normalized_direction = "prev" if str(direction).strip().lower() == "prev" else "next"
+    if current_index < 0 or current_index >= len(gov_index_data):
+        return candidates[-1] if normalized_direction == "prev" else candidates[0]
+
+    if normalized_direction == "next":
+        for idx in candidates:
+            if idx > current_index:
+                return idx
+        return candidates[0]
+
+    for idx in reversed(candidates):
+        if idx < current_index:
+            return idx
+    return candidates[-1]
+
+
 @app.route("/api/governance/next", methods=["GET"])
 def get_next_governance():
     for idx, record in enumerate(gov_index_data):
         if record.get("status") == "pending":
-            assets = record.get("assets", {})
-            frame_id = str(record.get("frame_id", "")).strip()
-            fixed_bounds = _extract_world_bounds_from_map_elements(frame_id)
-            bev_overlay = _extract_bev_overlay_from_scene_graph(
-                assets.get("scene_graph_json", ""),
-                fixed_world_bounds=fixed_bounds,
-            )
-            return jsonify(
-                {
-                    "task": record,
-                    "index": idx,
-                    "img_path": assets.get("raw_image", ""),
-                    "schematic_path": assets.get("bev_image", ""),
-                    "bev_overlay": bev_overlay,
-                }
-            )
+            return jsonify(_build_governance_task_payload(idx, record))
     return jsonify({"task": None})
+
+
+@app.route("/api/governance/frame", methods=["GET"])
+def get_governance_frame():
+    frame_id = str(request.args.get("frame_id", "")).strip()
+    index_arg = request.args.get("index")
+
+    if frame_id:
+        for idx, record in enumerate(gov_index_data):
+            if str(record.get("frame_id", "")).strip() == frame_id:
+                return jsonify(_build_governance_task_payload(idx, record))
+        return jsonify({"task": None, "message": "未找到指定 frame_id。"}), 404
+
+    if index_arg is not None:
+        idx = _as_int(index_arg, default=-1, minimum=0, maximum=max(0, len(gov_index_data) - 1))
+        if 0 <= idx < len(gov_index_data):
+            return jsonify(_build_governance_task_payload(idx, gov_index_data[idx]))
+        return jsonify({"task": None, "message": "索引超出范围。"}), 404
+
+    return jsonify({"task": None, "message": "请提供 frame_id 或 index。"}), 400
+
+
+@app.route("/api/governance/pedestrian_frame", methods=["GET"])
+def get_governance_pedestrian_frame():
+    direction = str(request.args.get("direction", "next") or "next").strip().lower()
+    only_with_data = _as_bool(request.args.get("only_with_data", "1"), default=True)
+    current_index = _as_int(request.args.get("current_index", -1), default=-1)
+
+    picked_index = _pick_governance_index_for_navigation(
+        direction=direction,
+        current_index=current_index,
+        only_with_pedestrian_data=only_with_data,
+    )
+    if picked_index is None:
+        if only_with_data:
+            return jsonify({"task": None, "message": "未找到包含行人过街数据的帧。"})
+        return jsonify({"task": None, "message": "当前无可浏览帧。"})
+
+    return jsonify(_build_governance_task_payload(picked_index, gov_index_data[picked_index]))
+
+
+@app.route("/api/governance/pedestrian_window", methods=["POST"])
+def update_pedestrian_window():
+    data = request.json or {}
+    window_frames = _as_int(data.get("window_frames", config.get("pipeline_pedestrian_window_frames", 60)), default=60, minimum=5, maximum=5000)
+    busy_threshold = _as_int(data.get("busy_threshold", config.get("pipeline_pedestrian_busy_threshold", 8)), default=8, minimum=1, maximum=5000)
+    saturated_threshold = _as_int(
+        data.get("saturated_threshold", config.get("pipeline_pedestrian_saturated_threshold", 14)),
+        default=14,
+        minimum=max(2, busy_threshold + 1),
+        maximum=10000,
+    )
+
+    config["pipeline_pedestrian_window_frames"] = window_frames
+    config["pipeline_pedestrian_busy_threshold"] = busy_threshold
+    config["pipeline_pedestrian_saturated_threshold"] = saturated_threshold
+    _sync_pipeline_defaults()
+    save_config()
+
+    # 重建索引以保证按时间顺序重新计算滑动窗统计。
+    build_or_load_governance_index(force_rebuild=True)
+
+    return jsonify(
+        {
+            "success": True,
+            "window_frames": int(config.get("pipeline_pedestrian_window_frames", window_frames)),
+            "busy_threshold": int(config.get("pipeline_pedestrian_busy_threshold", busy_threshold)),
+            "saturated_threshold": int(config.get("pipeline_pedestrian_saturated_threshold", saturated_threshold)),
+            "message": (
+                f"行人统计参数已更新：窗口 {int(config.get('pipeline_pedestrian_window_frames', window_frames))} 帧，"
+                f"繁忙阈值 {int(config.get('pipeline_pedestrian_busy_threshold', busy_threshold))}，"
+                f"饱和阈值 {int(config.get('pipeline_pedestrian_saturated_threshold', saturated_threshold))}。"
+            ),
+        }
+    )
 
 
 @app.route("/api/governance/submit", methods=["POST"])

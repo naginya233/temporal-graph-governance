@@ -184,6 +184,8 @@ Dynamic BEV requires:
 
 - 缓行评分演示文档（10 个典型场景对照表）:
    [docs/slowdown_scoring_demo.md](docs/slowdown_scoring_demo.md)
+- 行人过街饱和统计定义文档:
+   [docs/pedestrian_crossing_definition.md](docs/pedestrian_crossing_definition.md)
 
 ---
 
