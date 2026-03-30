@@ -1,6 +1,8 @@
+import base64
+import os
 import requests
 import math
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from governance.graph_analyzer import TrafficGraphAnalyzer
 
 
@@ -16,6 +18,15 @@ SOURCE_ROLE_WEIGHT = {
     "queue_head": 1.2,
 }
 
+VLM_TRIGGER_MODES = {
+    "off",
+    "critical",
+    "uncertainty",
+    "sample",
+    "critical_sample",
+    "hybrid",
+}
+
 class SceneAgent:
     """
     Scene Agent (场景理解智能体)
@@ -28,8 +39,8 @@ class SceneAgent:
         self,
         frame_id: str,
         scene_graph_dict: Dict[str, Any],
-        spatial_context: Dict[str, Any] = None,
-        following_filter: Dict[str, Any] = None,
+        spatial_context: Optional[Dict[str, Any]] = None,
+        following_filter: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Takes raw scene graph output and performs structure analysis.
@@ -62,15 +73,36 @@ class EventAgent:
     def __init__(
         self,
         use_llm: bool = True,
-        ollama_url: str = "http://localhost:11434/api/generate",
-        model_name: str = "qwen3-vl:4b",
-        request_timeout: int = 20,
+        llm_api_url: str = "http://8.138.133.71:8080/v1/chat/completions",
+        model_name: str = "qwen2-vl",
+        request_timeout: int = 12,
+        llm_api_key: str = "",
+        enable_vlm: bool = True,
+        llm_trigger_mode: str = "critical_sample",
+        llm_max_calls: int = 1200,
+        llm_max_ratio: float = 0.08,
+        llm_sample_every_n: int = 60,
+        ollama_url: str = "",
     ):
         self.name = "EventAgent"
         self.use_llm = use_llm
-        self.ollama_url = ollama_url
+        # backward compatibility: if old arg ollama_url is explicitly set, prefer it.
+        self.llm_api_url = (ollama_url or llm_api_url).strip()
         self.model_name = model_name
-        self.request_timeout = request_timeout
+        self.request_timeout = max(1, int(request_timeout))
+        self.llm_api_key = llm_api_key
+        self.enable_vlm = enable_vlm
+        normalized_mode = str(llm_trigger_mode or "critical").strip().lower()
+        self.llm_trigger_mode = normalized_mode if normalized_mode in VLM_TRIGGER_MODES else "critical"
+        self.llm_max_calls = max(0, int(llm_max_calls))
+        self.llm_max_ratio = max(0.0, min(float(llm_max_ratio), 1.0))
+        self.llm_sample_every_n = max(0, int(llm_sample_every_n))
+
+        self._expected_frames = 0
+        self._processed_frames = 0
+        self._llm_calls_made = 0
+        self._llm_budget_total = -1
+        self.reset_run_budget(expected_frames=0)
 
     @staticmethod
     def _unique_ordered(items: List[str]) -> List[str]:
@@ -223,7 +255,7 @@ class EventAgent:
                 source_entities = [queue_head]
                 source_type = "queue_head"
 
-            source_weights = {
+            source_weights: Dict[str, float] = {
                 src: self._source_weight(
                     entity_id=src,
                     source_type=source_type,
@@ -322,10 +354,10 @@ class EventAgent:
         for obj in slowdown_objects:
             if not isinstance(obj, dict):
                 continue
-            source_weights = obj.get("source_weights")
-            if not isinstance(source_weights, dict):
+            source_weights_map = obj.get("source_weights")
+            if not isinstance(source_weights_map, dict):
                 continue
-            for entity_id, weight in source_weights.items():
+            for entity_id, weight in source_weights_map.items():
                 source_entity = str(entity_id)
                 source_weight_by_entity[source_entity] = source_weight_by_entity.get(source_entity, 0.0) + float(weight)
 
@@ -568,32 +600,203 @@ class EventAgent:
         return prompt
 
     @staticmethod
-    def _should_call_llm(slowdown: Dict[str, Any]) -> bool:
+    def _is_critical_slowdown(slowdown: Dict[str, Any]) -> bool:
         return slowdown["level"] in {"medium", "high"} or bool(slowdown.get("is_abnormal", False))
 
-    def _call_ollama(self, system_prompt: str, user_prompt: str) -> str:
+    @staticmethod
+    def _is_uncertain_slowdown(slowdown: Dict[str, Any]) -> bool:
+        score = int(slowdown.get("score", 0) or 0)
+        merge_cnt = int(slowdown.get("merge_cnt", 0) or 0)
+        max_chain = int(slowdown.get("max_chain", 0) or 0)
+        queue_density = float(slowdown.get("queue_density", 0.0) or 0.0)
+
+        near_level_boundaries = score in {3, 4, 7, 8}
+        ambiguous_density = 0.82 <= queue_density <= 1.05
+        ambiguous_structure = (merge_cnt == 1 and ambiguous_density) or (max_chain in {3, 4} and ambiguous_density)
+        return near_level_boundaries or ambiguous_structure
+
+    def _is_sampled_frame(self) -> bool:
+        if self.llm_sample_every_n <= 0:
+            return False
+        if self._processed_frames <= 0:
+            return False
+        return self._processed_frames % self.llm_sample_every_n == 0
+
+    def _should_call_llm(self, slowdown: Dict[str, Any]) -> tuple[bool, str]:
+        critical = self._is_critical_slowdown(slowdown)
+        uncertain = self._is_uncertain_slowdown(slowdown)
+        sampled = self._is_sampled_frame()
+
+        mode = self.llm_trigger_mode
+        if mode == "off":
+            return False, "mode_off"
+        if mode == "critical":
+            return critical, "critical" if critical else "not_critical"
+        if mode == "uncertainty":
+            return uncertain, "uncertainty" if uncertain else "not_uncertain"
+        if mode == "sample":
+            return sampled, "sample" if sampled else "not_sampled"
+        if mode == "critical_sample":
+            if critical:
+                return True, "critical"
+            if sampled:
+                return True, "sample"
+            return False, "not_critical_or_sampled"
+        if mode == "hybrid":
+            if critical:
+                return True, "critical"
+            if uncertain:
+                return True, "uncertainty"
+            if sampled:
+                return True, "sample"
+            return False, "not_hybrid_triggered"
+        return critical, "critical" if critical else "not_critical"
+
+    def reset_run_budget(self, expected_frames: int = 0) -> None:
+        self._expected_frames = max(0, int(expected_frames))
+        self._processed_frames = 0
+        self._llm_calls_made = 0
+
+        limits: List[int] = []
+        if self.llm_max_calls > 0:
+            limits.append(self.llm_max_calls)
+
+        if self.llm_max_ratio > 0.0 and self._expected_frames > 0:
+            ratio_limit = int(math.ceil(self._expected_frames * self.llm_max_ratio))
+            ratio_limit = max(1, ratio_limit)
+            # 小规模 run 至少保留少量 VLM 预算，避免样本过少无法触发。
+            if self._expected_frames <= 200:
+                ratio_limit = max(3, ratio_limit)
+            limits.append(ratio_limit)
+
+        self._llm_budget_total = min(limits) if limits else -1
+
+    def _budget_remaining(self) -> Optional[int]:
+        if self._llm_budget_total < 0:
+            return None
+        return max(0, self._llm_budget_total - self._llm_calls_made)
+
+    def _consume_llm_budget(self) -> tuple[bool, str]:
+        if self._llm_budget_total < 0:
+            return True, "unlimited"
+        if self._llm_calls_made < self._llm_budget_total:
+            self._llm_calls_made += 1
+            return True, "consumed"
+        return False, "budget_exhausted"
+
+    @staticmethod
+    def _guess_image_mime_type(image_path: str) -> str:
+        ext = os.path.splitext(str(image_path or ""))[1].lower()
+        if ext in {".jpg", ".jpeg"}:
+            return "image/jpeg"
+        if ext == ".png":
+            return "image/png"
+        if ext == ".webp":
+            return "image/webp"
+        if ext == ".gif":
+            return "image/gif"
+        return "application/octet-stream"
+
+    def _build_image_data_url(self, image_path: str) -> str:
+        if not image_path:
+            return ""
+        if not os.path.isfile(image_path):
+            return ""
+        try:
+            with open(image_path, "rb") as image_file:
+                encoded = base64.b64encode(image_file.read()).decode("utf-8")
+            mime_type = self._guess_image_mime_type(image_path)
+            return f"data:{mime_type};base64,{encoded}"
+        except OSError:
+            return ""
+
+    @staticmethod
+    def _extract_chat_content(message_content: Any) -> str:
+        if isinstance(message_content, str):
+            return message_content.strip()
+        if isinstance(message_content, list):
+            chunks: List[str] = []
+            for chunk in message_content:
+                if not isinstance(chunk, dict):
+                    continue
+                if chunk.get("type") == "text":
+                    text = str(chunk.get("text", "")).strip()
+                    if text:
+                        chunks.append(text)
+            return "\n".join(chunks).strip()
+        return ""
+
+    def _call_chat_completions(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        raw_image_path: Optional[str] = None,
+    ) -> str:
+        user_text = f"当前路口状态:\n{user_prompt}\n\n请给出治理建议："
+        user_content: Any = user_text
+
+        if self.enable_vlm and raw_image_path:
+            image_data_url = self._build_image_data_url(raw_image_path)
+            if image_data_url:
+                user_content = [
+                    {"type": "text", "text": user_text},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": image_data_url},
+                    },
+                ]
+
         payload = {
             "model": self.model_name,
-            "prompt": f"{system_prompt}\n\n当前路口状态:\n{user_prompt}\n\n请给出治理建议：",
-            "stream": False,
-            "options": {
-                "temperature": 0.2,
-            },
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            "temperature": 0.2,
         }
+        headers = {"Content-Type": "application/json"}
+        if self.llm_api_key:
+            headers["Authorization"] = f"Bearer {self.llm_api_key}"
+
         try:
-            response = requests.post(self.ollama_url, json=payload, timeout=self.request_timeout)
-            if response.status_code == 200:
+            response = requests.post(
+                self.llm_api_url,
+                headers=headers,
+                json=payload,
+                timeout=self.request_timeout,
+            )
+            if response.status_code != 200:
+                response_preview = response.text[:500]
+                return f"[LLM 异常] 状态码: {response.status_code}, body: {response_preview}"
+
+            try:
                 result = response.json()
-                return result.get("response", "").strip()
-            return f"[LLM 异常] 状态码: {response.status_code}"
+            except ValueError:
+                return f"[LLM 异常] 响应不是合法 JSON: {response.text[:500]}"
+
+            choices = result.get("choices", [])
+            if isinstance(choices, list) and choices:
+                first_choice = choices[0] if isinstance(choices[0], dict) else {}
+                message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
+                content = self._extract_chat_content(message.get("content", ""))
+                if content:
+                    return content
+
+            # fallback:兼容某些本地服务保留的 response 字段
+            fallback_content = str(result.get("response", "")).strip()
+            if fallback_content:
+                return fallback_content
+            return "[LLM 异常] 返回结构缺少可解析内容(choices/message/content)"
         except requests.exceptions.RequestException as exc:
             return f"[LLM 服务未响应] {exc}"
 
-    def reason(self, scene_insights: Dict[str, Any]) -> str:
-        analysis = self.analyze(scene_insights)
+    def reason(self, scene_insights: Dict[str, Any], raw_image_path: Optional[str] = None) -> str:
+        analysis = self.analyze(scene_insights, raw_image_path=raw_image_path)
         return analysis["report"]
 
-    def analyze(self, scene_insights: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, scene_insights: Dict[str, Any], raw_image_path: Optional[str] = None) -> Dict[str, Any]:
+        self._processed_frames += 1
+
         slowdown = self._score_slowdown(scene_insights)
         prompt = self._generate_prompt(scene_insights, slowdown)
 
@@ -605,15 +808,49 @@ class EventAgent:
             fast_decision = "【快速决策】当前为正常受控排队，维持常规监测。"
         
         llm_insight = ""
-        if self.use_llm and self._should_call_llm(slowdown):
-            sys_prompt = (
-                "你是交通缓行分析助手。"
-                "请基于 following 结构给出缓行原因判断和两条可执行建议，"
-                "并明确是否需要信号配时优化。"
-                "回答控制在3句话内。"
-            )
-            llm_reply = self._call_ollama(sys_prompt, prompt)
-            llm_insight = f"\n【大模型(Qwen3-VL)深度语义推理】\n{llm_reply}"
+        llm_meta: Dict[str, Any] = {
+            "enabled": bool(self.use_llm),
+            "trigger_mode": self.llm_trigger_mode,
+            "triggered": False,
+            "trigger_reason": "",
+            "skipped_reason": "",
+            "request_timeout_sec": self.request_timeout,
+            "processed_frames": self._processed_frames,
+            "expected_frames": self._expected_frames,
+            "calls_made": self._llm_calls_made,
+            "budget_total": (self._llm_budget_total if self._llm_budget_total >= 0 else None),
+            "budget_remaining": self._budget_remaining(),
+        }
+
+        if self.use_llm:
+            should_call, trigger_reason = self._should_call_llm(slowdown)
+            llm_meta["trigger_reason"] = trigger_reason
+
+            if should_call:
+                allowed, budget_state = self._consume_llm_budget()
+                if allowed:
+                    sys_prompt = (
+                        "你是交通缓行分析助手。"
+                        "请基于 following 结构给出缓行原因判断和两条可执行建议，"
+                        "并明确是否需要信号配时优化。"
+                        "回答控制在3句话内。"
+                    )
+                    llm_reply = self._call_chat_completions(
+                        system_prompt=sys_prompt,
+                        user_prompt=prompt,
+                        raw_image_path=raw_image_path,
+                    )
+                    llm_insight = f"\n【大模型(标准ChatCompletions接口)深度语义推理】\n{llm_reply}"
+                    llm_meta["triggered"] = True
+                else:
+                    llm_meta["skipped_reason"] = budget_state
+            else:
+                llm_meta["skipped_reason"] = "trigger_not_matched"
+        else:
+            llm_meta["skipped_reason"] = "llm_disabled"
+
+        llm_meta["calls_made"] = self._llm_calls_made
+        llm_meta["budget_remaining"] = self._budget_remaining()
 
         report = prompt + fast_decision + llm_insight
         return {
@@ -621,5 +858,6 @@ class EventAgent:
             "risk": dict(slowdown),
             "fast_decision": fast_decision,
             "llm_insight": llm_insight,
+            "llm_meta": llm_meta,
             "report": report,
         }

@@ -30,8 +30,30 @@ def _default_governance_outputs_dir() -> str:
     return os.path.normpath(os.path.join(_default_traffic_system_dir(), "outputs"))
 
 
+def _candidate_dataset_root_dirs() -> List[str]:
+    return [
+        os.path.normpath(os.path.join(BASE_DIR, "..", "..", "traffic_dataset", "traffic_dataset")),
+        os.path.normpath(os.path.join(BASE_DIR, "..", "..", "dairv2xspd", "dairv2xspd")),
+    ]
+
+
+def _first_existing_dir(candidates: List[str]) -> str:
+    for item in candidates:
+        text = str(item).strip()
+        if not text:
+            continue
+        normalized = os.path.normpath(text)
+        if normalized and normalized != "." and os.path.isdir(normalized):
+            return normalized
+    return ""
+
+
 def _default_dataset_root_dir() -> str:
-    return os.path.normpath(os.path.join(BASE_DIR, "..", "..", "traffic_dataset", "traffic_dataset"))
+    candidates = _candidate_dataset_root_dirs()
+    existing = _first_existing_dir(candidates)
+    if existing:
+        return existing
+    return candidates[0]
 
 
 def _default_label_virtuallidar_dir() -> str:
@@ -69,9 +91,16 @@ config: Dict[str, Any] = {
     "pipeline_label_camera_dir": _default_label_camera_dir(),
     "pipeline_calib_virtuallidar_to_world_dir": _default_calib_virtuallidar_to_world_dir(),
     "pipeline_map_elements_dir": _default_map_elements_dir(),
-    "pipeline_model": "qwen3-vl:4b",
+    "pipeline_model": "qwen2-vl",
     "pipeline_max_frames": 20,
     "pipeline_use_llm": True,
+    "pipeline_llm_api_url": "http://8.138.133.71:8080/v1/chat/completions",
+    "pipeline_enable_vlm_image": True,
+    "pipeline_llm_timeout": 12,
+    "pipeline_vlm_trigger_mode": "critical_sample",
+    "pipeline_vlm_max_calls": 1200,
+    "pipeline_vlm_max_ratio": 0.08,
+    "pipeline_vlm_sample_every_n": 60,
     "pipeline_generate_report": True,
     "pipeline_following_filter_enabled": True,
     "pipeline_following_min_longitudinal_gap": 1.5,
@@ -98,6 +127,7 @@ LEVEL_WEIGHT = {
     "medium": 1,
     "high": 2,
 }
+VLM_TRIGGER_MODES = {"off", "critical", "uncertainty", "sample", "critical_sample", "hybrid"}
 # 向后兼容旧变量名
 RISK_WEIGHT = LEVEL_WEIGHT
 
@@ -194,6 +224,18 @@ def _normalize_path(value: Optional[str]) -> str:
         return ""
     normalized = os.path.normpath(text)
     return "" if normalized == "." else normalized
+
+
+def _resolve_dir_with_fallback(path_value: Optional[str], fallback_dir: str) -> str:
+    preferred = _normalize_path(path_value)
+    if preferred and os.path.isdir(preferred):
+        return preferred
+
+    fallback = _normalize_path(fallback_dir)
+    if fallback and os.path.isdir(fallback):
+        return fallback
+
+    return preferred or fallback
 
 
 def _as_bool(value: Any, default: bool = False) -> bool:
@@ -489,7 +531,10 @@ def _load_map_elements_payload(frame_id: str) -> Dict[str, Any]:
 
 
 def _load_label_virtuallidar_payload(frame_id: str) -> List[Dict[str, Any]]:
-    label_dir = _normalize_path(config.get("pipeline_label_virtuallidar_dir", ""))
+    label_dir = _resolve_dir_with_fallback(
+        config.get("pipeline_label_virtuallidar_dir", ""),
+        _default_label_virtuallidar_dir(),
+    )
     if not label_dir or not os.path.isdir(label_dir):
         return []
 
@@ -504,7 +549,10 @@ def _load_label_virtuallidar_payload(frame_id: str) -> List[Dict[str, Any]]:
 
 
 def _load_virtuallidar_to_world_calib(frame_id: str) -> Dict[str, Any]:
-    calib_dir = _normalize_path(config.get("pipeline_calib_virtuallidar_to_world_dir", ""))
+    calib_dir = _resolve_dir_with_fallback(
+        config.get("pipeline_calib_virtuallidar_to_world_dir", ""),
+        _default_calib_virtuallidar_to_world_dir(),
+    )
     if not calib_dir or not os.path.isdir(calib_dir):
         return {}
 
@@ -1408,29 +1456,40 @@ def _sync_pipeline_defaults() -> None:
     if not _normalize_path(config.get("pipeline_raw_image_dir", "")):
         config["pipeline_raw_image_dir"] = _normalize_path(config.get("img_dir", ""))
 
-    if not _normalize_path(config.get("pipeline_label_virtuallidar_dir", "")):
-        config["pipeline_label_virtuallidar_dir"] = _default_label_virtuallidar_dir()
-    else:
-        config["pipeline_label_virtuallidar_dir"] = _normalize_path(config.get("pipeline_label_virtuallidar_dir", ""))
+    config["pipeline_label_virtuallidar_dir"] = _resolve_dir_with_fallback(
+        config.get("pipeline_label_virtuallidar_dir", ""),
+        _default_label_virtuallidar_dir(),
+    )
 
-    if not _normalize_path(config.get("pipeline_label_camera_dir", "")):
-        config["pipeline_label_camera_dir"] = _default_label_camera_dir()
-    else:
-        config["pipeline_label_camera_dir"] = _normalize_path(config.get("pipeline_label_camera_dir", ""))
+    config["pipeline_label_camera_dir"] = _resolve_dir_with_fallback(
+        config.get("pipeline_label_camera_dir", ""),
+        _default_label_camera_dir(),
+    )
 
-    if not _normalize_path(config.get("pipeline_calib_virtuallidar_to_world_dir", "")):
-        config["pipeline_calib_virtuallidar_to_world_dir"] = _default_calib_virtuallidar_to_world_dir()
-    else:
-        config["pipeline_calib_virtuallidar_to_world_dir"] = _normalize_path(config.get("pipeline_calib_virtuallidar_to_world_dir", ""))
+    config["pipeline_calib_virtuallidar_to_world_dir"] = _resolve_dir_with_fallback(
+        config.get("pipeline_calib_virtuallidar_to_world_dir", ""),
+        _default_calib_virtuallidar_to_world_dir(),
+    )
 
-    if not _normalize_path(config.get("pipeline_map_elements_dir", "")):
-        config["pipeline_map_elements_dir"] = _default_map_elements_dir()
-    else:
-        config["pipeline_map_elements_dir"] = _normalize_path(config.get("pipeline_map_elements_dir", ""))
+    config["pipeline_map_elements_dir"] = _resolve_dir_with_fallback(
+        config.get("pipeline_map_elements_dir", ""),
+        _default_map_elements_dir(),
+    )
 
-    config["pipeline_model"] = str(config.get("pipeline_model", "qwen3-vl:4b") or "qwen3-vl:4b")
+    config["pipeline_model"] = str(config.get("pipeline_model", "qwen2-vl") or "qwen2-vl")
     config["pipeline_max_frames"] = _as_int(config.get("pipeline_max_frames", 20), default=20)
     config["pipeline_use_llm"] = _as_bool(config.get("pipeline_use_llm", True), default=True)
+    config["pipeline_llm_api_url"] = str(
+        config.get("pipeline_llm_api_url", "http://8.138.133.71:8080/v1/chat/completions")
+        or "http://8.138.133.71:8080/v1/chat/completions"
+    ).strip()
+    config["pipeline_enable_vlm_image"] = _as_bool(config.get("pipeline_enable_vlm_image", True), default=True)
+    config["pipeline_llm_timeout"] = _as_int(config.get("pipeline_llm_timeout", 12), default=12, minimum=1, maximum=120)
+    trigger_mode = str(config.get("pipeline_vlm_trigger_mode", "critical_sample") or "critical_sample").strip().lower()
+    config["pipeline_vlm_trigger_mode"] = trigger_mode if trigger_mode in VLM_TRIGGER_MODES else "critical_sample"
+    config["pipeline_vlm_max_calls"] = _as_int(config.get("pipeline_vlm_max_calls", 1200), default=1200, minimum=0, maximum=1000000)
+    config["pipeline_vlm_max_ratio"] = _as_float(config.get("pipeline_vlm_max_ratio", 0.08), default=0.08, minimum=0.0, maximum=1.0)
+    config["pipeline_vlm_sample_every_n"] = _as_int(config.get("pipeline_vlm_sample_every_n", 60), default=60, minimum=0, maximum=100000)
     config["pipeline_generate_report"] = _as_bool(config.get("pipeline_generate_report", True), default=True)
     config["pipeline_following_filter_enabled"] = _as_bool(config.get("pipeline_following_filter_enabled", True), default=True)
     config["pipeline_following_min_longitudinal_gap"] = _as_float(config.get("pipeline_following_min_longitudinal_gap", 1.5), default=1.5, minimum=0.0, maximum=100.0)
@@ -1799,8 +1858,28 @@ def _start_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
     output_dir = _normalize_path(payload.get("output_dir", config.get("gov_outputs_dir", "")))
 
     max_frames = _as_int(payload.get("max_frames", config.get("pipeline_max_frames", 20)), default=20)
-    model = str(payload.get("model", config.get("pipeline_model", "qwen3-vl:4b")) or "qwen3-vl:4b")
+    model = str(payload.get("model", config.get("pipeline_model", "qwen2-vl")) or "qwen2-vl")
     use_llm = _as_bool(payload.get("use_llm", config.get("pipeline_use_llm", True)), default=True)
+    llm_api_url = str(
+        payload.get("llm_api_url", config.get("pipeline_llm_api_url", "http://8.138.133.71:8080/v1/chat/completions"))
+        or "http://8.138.133.71:8080/v1/chat/completions"
+    ).strip()
+    enable_vlm_image = _as_bool(payload.get("enable_vlm_image", config.get("pipeline_enable_vlm_image", True)), default=True)
+    llm_timeout = _as_int(payload.get("llm_timeout", config.get("pipeline_llm_timeout", 12)), default=12, minimum=1, maximum=120)
+    vlm_trigger_mode = str(
+        payload.get("vlm_trigger_mode", config.get("pipeline_vlm_trigger_mode", "critical_sample"))
+        or "critical_sample"
+    ).strip().lower()
+    if vlm_trigger_mode not in VLM_TRIGGER_MODES:
+        vlm_trigger_mode = "critical_sample"
+    vlm_max_calls = _as_int(payload.get("vlm_max_calls", config.get("pipeline_vlm_max_calls", 1200)), default=1200, minimum=0, maximum=1000000)
+    vlm_max_ratio = _as_float(payload.get("vlm_max_ratio", config.get("pipeline_vlm_max_ratio", 0.08)), default=0.08, minimum=0.0, maximum=1.0)
+    vlm_sample_every_n = _as_int(
+        payload.get("vlm_sample_every_n", config.get("pipeline_vlm_sample_every_n", 60)),
+        default=60,
+        minimum=0,
+        maximum=100000,
+    )
     generate_report = _as_bool(payload.get("generate_report", config.get("pipeline_generate_report", True)), default=True)
     following_filter_enabled = _as_bool(payload.get("following_filter_enabled", config.get("pipeline_following_filter_enabled", True)), default=True)
     following_min_longitudinal_gap = _as_float(
@@ -1879,6 +1958,18 @@ def _start_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
         str(max_frames),
         "--model",
         model,
+        "--llm-api-url",
+        llm_api_url,
+        "--llm-timeout",
+        str(llm_timeout),
+        "--vlm-trigger-mode",
+        vlm_trigger_mode,
+        "--vlm-max-calls",
+        str(vlm_max_calls),
+        "--vlm-max-ratio",
+        str(vlm_max_ratio),
+        "--vlm-sample-every-n",
+        str(vlm_sample_every_n),
         "--output-dir",
         output_dir,
         "--following-min-longitudinal-gap",
@@ -1894,6 +1985,8 @@ def _start_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
         command.append("--disable-following-spatial-filter")
     if following_require_same_lane:
         command.append("--following-require-same-lane")
+    if not enable_vlm_image:
+        command.append("--disable-vlm-image")
     if not use_llm:
         command.append("--no-llm")
     if not generate_report:
@@ -1912,6 +2005,13 @@ def _start_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
     config["pipeline_max_frames"] = max_frames
     config["pipeline_model"] = model
     config["pipeline_use_llm"] = use_llm
+    config["pipeline_llm_api_url"] = llm_api_url
+    config["pipeline_enable_vlm_image"] = enable_vlm_image
+    config["pipeline_llm_timeout"] = llm_timeout
+    config["pipeline_vlm_trigger_mode"] = vlm_trigger_mode
+    config["pipeline_vlm_max_calls"] = vlm_max_calls
+    config["pipeline_vlm_max_ratio"] = vlm_max_ratio
+    config["pipeline_vlm_sample_every_n"] = vlm_sample_every_n
     config["pipeline_generate_report"] = generate_report
     config["pipeline_following_filter_enabled"] = following_filter_enabled
     config["pipeline_following_min_longitudinal_gap"] = following_min_longitudinal_gap
@@ -2103,6 +2203,13 @@ def _build_showcase_payload() -> Dict[str, Any]:
         "top_frames": frame_rows[:36],
         "score_series": score_series[:240],
         "pipeline_config": {
+            "llm_api_url": str(config.get("pipeline_llm_api_url", "")),
+            "enable_vlm_image": bool(config.get("pipeline_enable_vlm_image", True)),
+            "llm_timeout": int(config.get("pipeline_llm_timeout", 12)),
+            "vlm_trigger_mode": str(config.get("pipeline_vlm_trigger_mode", "critical_sample")),
+            "vlm_max_calls": int(config.get("pipeline_vlm_max_calls", 1200)),
+            "vlm_max_ratio": float(config.get("pipeline_vlm_max_ratio", 0.08)),
+            "vlm_sample_every_n": int(config.get("pipeline_vlm_sample_every_n", 60)),
             "following_filter_enabled": bool(config.get("pipeline_following_filter_enabled", True)),
             "following_require_same_lane": bool(config.get("pipeline_following_require_same_lane", True)),
             "following_min_longitudinal_gap": float(config.get("pipeline_following_min_longitudinal_gap", 1.5)),
@@ -2186,11 +2293,26 @@ def update_config():
         config["pipeline_map_elements_dir"] = _normalize_path(data.get("pipeline_map_elements_dir"))
 
     if "pipeline_model" in data:
-        config["pipeline_model"] = str(data.get("pipeline_model") or config.get("pipeline_model", "qwen3-vl:4b"))
+        config["pipeline_model"] = str(data.get("pipeline_model") or config.get("pipeline_model", "qwen2-vl"))
     if "pipeline_max_frames" in data:
         config["pipeline_max_frames"] = _as_int(data.get("pipeline_max_frames"), default=config.get("pipeline_max_frames", 20))
     if "pipeline_use_llm" in data:
         config["pipeline_use_llm"] = _as_bool(data.get("pipeline_use_llm"), default=True)
+    if "pipeline_llm_api_url" in data:
+        config["pipeline_llm_api_url"] = str(data.get("pipeline_llm_api_url") or "http://8.138.133.71:8080/v1/chat/completions").strip()
+    if "pipeline_enable_vlm_image" in data:
+        config["pipeline_enable_vlm_image"] = _as_bool(data.get("pipeline_enable_vlm_image"), default=True)
+    if "pipeline_llm_timeout" in data:
+        config["pipeline_llm_timeout"] = _as_int(data.get("pipeline_llm_timeout"), default=12, minimum=1, maximum=120)
+    if "pipeline_vlm_trigger_mode" in data:
+        incoming_trigger_mode = str(data.get("pipeline_vlm_trigger_mode") or "critical_sample").strip().lower()
+        config["pipeline_vlm_trigger_mode"] = incoming_trigger_mode if incoming_trigger_mode in VLM_TRIGGER_MODES else "critical_sample"
+    if "pipeline_vlm_max_calls" in data:
+        config["pipeline_vlm_max_calls"] = _as_int(data.get("pipeline_vlm_max_calls"), default=1200, minimum=0, maximum=1000000)
+    if "pipeline_vlm_max_ratio" in data:
+        config["pipeline_vlm_max_ratio"] = _as_float(data.get("pipeline_vlm_max_ratio"), default=0.08, minimum=0.0, maximum=1.0)
+    if "pipeline_vlm_sample_every_n" in data:
+        config["pipeline_vlm_sample_every_n"] = _as_int(data.get("pipeline_vlm_sample_every_n"), default=60, minimum=0, maximum=100000)
     if "pipeline_generate_report" in data:
         config["pipeline_generate_report"] = _as_bool(data.get("pipeline_generate_report"), default=True)
     if "pipeline_following_filter_enabled" in data:

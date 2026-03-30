@@ -5,11 +5,18 @@ function bindPipelineFormEvents() {
         const fieldIds = [
             'run-max-frames',
             'run-model',
+            'run-llm-api-url',
+            'run-llm-timeout',
+            'run-vlm-trigger-mode',
+            'run-vlm-max-calls',
+            'run-vlm-max-ratio',
+            'run-vlm-sample-every-n',
             'run-data-dir',
             'run-bev-dir',
             'run-raw-dir',
             'run-output-dir',
             'run-use-llm',
+            'run-enable-vlm-image',
             'run-gen-report',
         ];
 
@@ -35,8 +42,15 @@ function bindPipelineFormEvents() {
         document.getElementById('run-raw-dir').value = cfg.pipeline_raw_image_dir || cfg.img_dir || '';
         document.getElementById('run-output-dir').value = cfg.gov_outputs_dir || '';
         document.getElementById('run-max-frames').value = cfg.pipeline_max_frames || 20;
-        document.getElementById('run-model').value = cfg.pipeline_model || 'qwen3-vl:4b';
+        document.getElementById('run-model').value = cfg.pipeline_model || 'qwen2-vl';
+        document.getElementById('run-llm-api-url').value = cfg.pipeline_llm_api_url || 'http://8.138.133.71:8080/v1/chat/completions';
+        document.getElementById('run-llm-timeout').value = Number(cfg.pipeline_llm_timeout || 12);
+        document.getElementById('run-vlm-trigger-mode').value = cfg.pipeline_vlm_trigger_mode || 'critical_sample';
+        document.getElementById('run-vlm-max-calls').value = Number(cfg.pipeline_vlm_max_calls || 1200);
+        document.getElementById('run-vlm-max-ratio').value = Number(cfg.pipeline_vlm_max_ratio || 0.08);
+        document.getElementById('run-vlm-sample-every-n').value = Number(cfg.pipeline_vlm_sample_every_n || 60);
         document.getElementById('run-use-llm').checked = !!cfg.pipeline_use_llm;
+        document.getElementById('run-enable-vlm-image').checked = cfg.pipeline_enable_vlm_image !== false;
         document.getElementById('run-gen-report').checked = !!cfg.pipeline_generate_report;
 
         pipelineFormInitialized = true;
@@ -271,7 +285,14 @@ function bindPipelineFormEvents() {
             const payload = {
                 max_frames: Number(document.getElementById('run-max-frames').value || 20),
                 model: document.getElementById('run-model').value,
+                llm_api_url: document.getElementById('run-llm-api-url').value,
+                llm_timeout: Number(document.getElementById('run-llm-timeout').value || 12),
+                vlm_trigger_mode: document.getElementById('run-vlm-trigger-mode').value,
+                vlm_max_calls: Number(document.getElementById('run-vlm-max-calls').value || 1200),
+                vlm_max_ratio: Number(document.getElementById('run-vlm-max-ratio').value || 0.08),
+                vlm_sample_every_n: Number(document.getElementById('run-vlm-sample-every-n').value || 60),
                 use_llm: document.getElementById('run-use-llm').checked,
+                enable_vlm_image: document.getElementById('run-enable-vlm-image').checked,
                 generate_report: document.getElementById('run-gen-report').checked,
                 data_dir: document.getElementById('run-data-dir').value,
                 bev_dir: document.getElementById('run-bev-dir').value,
@@ -359,6 +380,13 @@ function bindPipelineFormEvents() {
             pipeline_model: document.getElementById('run-model').value,
             pipeline_max_frames: Number(document.getElementById('run-max-frames').value || 20),
             pipeline_use_llm: document.getElementById('run-use-llm').checked,
+            pipeline_llm_api_url: document.getElementById('run-llm-api-url').value,
+            pipeline_enable_vlm_image: document.getElementById('run-enable-vlm-image').checked,
+            pipeline_llm_timeout: Number(document.getElementById('run-llm-timeout').value || 12),
+            pipeline_vlm_trigger_mode: document.getElementById('run-vlm-trigger-mode').value,
+            pipeline_vlm_max_calls: Number(document.getElementById('run-vlm-max-calls').value || 1200),
+            pipeline_vlm_max_ratio: Number(document.getElementById('run-vlm-max-ratio').value || 0.08),
+            pipeline_vlm_sample_every_n: Number(document.getElementById('run-vlm-sample-every-n').value || 60),
             pipeline_generate_report: document.getElementById('run-gen-report').checked,
         };
 

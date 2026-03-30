@@ -22,7 +22,15 @@ class TrafficGovernancePipeline:
         bev_dir: str,
         raw_image_dir: str,
         use_llm: bool = True,
-        model_name: str = "qwen3-vl:4b",
+        llm_api_url: str = "http://8.138.133.71:8080/v1/chat/completions",
+        model_name: str = "qwen2-vl",
+        llm_api_key: str = "",
+        enable_vlm: bool = True,
+        llm_timeout: int = 12,
+        vlm_trigger_mode: str = "critical_sample",
+        vlm_max_calls: int = 1200,
+        vlm_max_ratio: float = 0.08,
+        vlm_sample_every_n: int = 60,
         output_dir: str = "outputs",
         generate_report: bool = True,
         enable_temporal_calibration: bool = True,
@@ -49,7 +57,18 @@ class TrafficGovernancePipeline:
         )
         self.asset_indexer = FrameAssetIndexer(data_dir, bev_dir, raw_image_dir)
         self.scene_agent = SceneAgent()
-        self.event_agent = EventAgent(use_llm=use_llm, model_name=model_name)
+        self.event_agent = EventAgent(
+            use_llm=use_llm,
+            llm_api_url=llm_api_url,
+            model_name=model_name,
+            llm_api_key=llm_api_key,
+            enable_vlm=enable_vlm,
+            request_timeout=llm_timeout,
+            llm_trigger_mode=vlm_trigger_mode,
+            llm_max_calls=vlm_max_calls,
+            llm_max_ratio=vlm_max_ratio,
+            llm_sample_every_n=vlm_sample_every_n,
+        )
         self.segmenter = TemporalEventSegmenter(min_active_level="medium")
         self.pruner = DynamicTopologyPruner()
         self.output_dir = output_dir
@@ -90,6 +109,7 @@ class TrafficGovernancePipeline:
 
         output_file = self._prepare_output_file()
         scene_files = self.loader.iter_files(max_frames=max_frames)
+        self.event_agent.reset_run_budget(expected_frames=len(scene_files))
         asset_summary = self.asset_indexer.get_summary()
         print(f"待处理帧数: {len(scene_files)}")
         print(
@@ -142,7 +162,13 @@ class TrafficGovernancePipeline:
                 spatial_context=spatial_context,
                 following_filter=self.following_filter,
             )
-            event_analysis = self.event_agent.analyze(scene_insights)
+            assets = self.asset_indexer.get_frame_assets(frame_id)
+            raw_image_path = assets.get("raw_image")
+            raw_image_path = str(raw_image_path) if isinstance(raw_image_path, str) else None
+            event_analysis = self.event_agent.analyze(
+                scene_insights,
+                raw_image_path=raw_image_path,
+            )
             governance_report = event_analysis["report"]
 
             if self.enable_temporal_calibration:
@@ -174,8 +200,6 @@ class TrafficGovernancePipeline:
             slowdown_class_counts[slowdown_class] = slowdown_class_counts.get(slowdown_class, 0) + 1
 
             print(governance_report)
-
-            assets = self.asset_indexer.get_frame_assets(frame_id)
 
             record = {
                 "frame_id": frame_id,
@@ -277,7 +301,7 @@ if __name__ == "__main__":
         help="Directory for per-frame map_elements json files",
     )
     parser.add_argument("--max-frames", type=int, default=10, help="Max number of frames to process")
-    parser.add_argument("--no-llm", action="store_true", help="Disable Ollama inference")
+    parser.add_argument("--no-llm", action="store_true", help="Disable LLM/VLM inference")
     parser.add_argument("--no-report", action="store_true", help="Disable markdown/html report generation")
     parser.add_argument("--disable-temporal-calibration", action="store_true", help="Disable temporal consistency calibration")
     parser.add_argument("--disable-following-spatial-filter", action="store_true", help="Disable following spatial consistency filtering")
@@ -289,7 +313,24 @@ if __name__ == "__main__":
     parser.add_argument("--following-allow-cross-lane", action="store_false", dest="following_require_same_lane", help="Allow follower and leader on different lanes")
     parser.add_argument("--calibration-alpha", type=float, default=0.7, help="EMA alpha for temporal calibration")
     parser.add_argument("--calibration-persistence-window", type=int, default=2, help="Persistent edge threshold in frames")
-    parser.add_argument("--model", default="qwen3-vl:4b", help="Ollama model name")
+    parser.add_argument(
+        "--llm-api-url",
+        default="http://8.138.133.71:8080/v1/chat/completions",
+        help="OpenAI-compatible chat/completions endpoint",
+    )
+    parser.add_argument("--llm-api-key", default="", help="Optional bearer token for LLM API")
+    parser.add_argument("--disable-vlm-image", action="store_true", help="Disable raw-image embedding for VLM requests")
+    parser.add_argument("--llm-timeout", type=int, default=12, help="LLM request timeout in seconds")
+    parser.add_argument(
+        "--vlm-trigger-mode",
+        default="critical_sample",
+        choices=["off", "critical", "uncertainty", "sample", "critical_sample", "hybrid"],
+        help="VLM trigger mode",
+    )
+    parser.add_argument("--vlm-max-calls", type=int, default=1200, help="Max LLM/VLM calls per run, <=0 means unlimited")
+    parser.add_argument("--vlm-max-ratio", type=float, default=0.08, help="Max LLM/VLM call ratio by total frames, <=0 means unlimited")
+    parser.add_argument("--vlm-sample-every-n", type=int, default=60, help="Sample one frame every N frames when sample mode is enabled")
+    parser.add_argument("--model", default="qwen2-vl", help="LLM/VLM model name")
     parser.add_argument("--output-dir", default="outputs", help="Directory to store run jsonl")
     args = parser.parse_args()
 
@@ -298,7 +339,15 @@ if __name__ == "__main__":
         bev_dir=args.bev_dir,
         raw_image_dir=args.raw_image_dir,
         use_llm=not args.no_llm,
+        llm_api_url=args.llm_api_url,
         model_name=args.model,
+        llm_api_key=args.llm_api_key,
+        enable_vlm=not args.disable_vlm_image,
+        llm_timeout=args.llm_timeout,
+        vlm_trigger_mode=args.vlm_trigger_mode,
+        vlm_max_calls=args.vlm_max_calls,
+        vlm_max_ratio=args.vlm_max_ratio,
+        vlm_sample_every_n=args.vlm_sample_every_n,
         output_dir=args.output_dir,
         generate_report=not args.no_report,
         enable_temporal_calibration=not args.disable_temporal_calibration,

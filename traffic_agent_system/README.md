@@ -17,7 +17,7 @@ The pipeline does not modify the visual-to-scene-graph generation process. It co
 - `governance/graph_analyzer.py`: following-relation graph analysis for convoy and queue indicators.
 - `governance/temporal_consistency_calibrator.py`: frame-level slowdown temporal smoothing and consistency calibration.
 - `governance/temporal_event_segmenter.py`: frame-level slowdown to temporal event segments.
-- `agents/cognitive_agents.py`: following-centric scene analysis + slowdown reasoning (rule + optional Ollama).
+- `agents/cognitive_agents.py`: following-centric scene analysis + slowdown reasoning (rule + optional OpenAI-compatible Chat Completions / VLM).
 - `reporting/review_report.py`: markdown/html review report generator.
 - `pipeline.py`: CLI entry point and run orchestration.
 - `research_ops/`: CVPR non-writing execution layer (protocol/matrices/scripts).
@@ -154,10 +154,16 @@ python pipeline.py \
 	--following-require-same-lane
 ```
 
-Enable local Ollama model:
+Enable OpenAI-compatible Chat Completions model:
 
 ```bash
-python pipeline.py --max-frames 20 --model qwen3-vl:4b
+python pipeline.py --max-frames 20 --model qwen3-vl:4b --llm-api-url http://localhost:11434/v1/chat/completions
+```
+
+Use remote VLM endpoint (example):
+
+```bash
+python pipeline.py --max-frames 20 --model qwen2-vl --llm-api-url http://8.138.133.71:8080/v1/chat/completions
 ```
 
 ## Output
