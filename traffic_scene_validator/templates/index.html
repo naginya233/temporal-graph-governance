@@ -16,6 +16,7 @@
         <div class="mode-switch">
             <button id="mode-governance" class="mode-btn active" onclick="switchMode('governance')">治理主功能</button>
             <button id="mode-relation" class="mode-btn" onclick="switchMode('relation')">关系校对次功能</button>
+            <button id="mode-signal" class="mode-btn" onclick="switchMode('signal')">信号机控制</button>
         </div>
     </div>
     <div class="header-right">
@@ -87,11 +88,11 @@
                     </div>
                     <div class="field">
                         <label>LLM API URL</label>
-                        <input id="run-llm-api-url" type="text" value="http://8.138.133.71:8080/v1/chat/completions">
+                        <input id="run-llm-api-url" type="text" value="http://host.docker.internal:8001/v1/chat/completions">
                     </div>
                     <div class="field">
                         <label>LLM Timeout (s)</label>
-                        <input id="run-llm-timeout" type="number" min="1" max="120" value="12">
+                        <input id="run-llm-timeout" type="number" min="1" max="120" value="25">
                     </div>
                     <div class="field">
                         <label>VLM Trigger Mode</label>
@@ -154,6 +155,334 @@
                 <div class="runtime-line"><strong>最后产物</strong>: <span id="runtime-output">-</span></div>
                 <div class="runtime-line"><strong>错误</strong>: <span id="runtime-error">-</span></div>
                 <div class="log-box" id="pipeline-logs">尚无日志</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel signal-panel" id="signal-panel" style="display:none;">
+        <div class="signal-topbar">
+            <div class="signal-status-wrap">
+                <strong>NL Agent 状态</strong>
+                <span id="signal-health-pill" class="signal-health-pill pending">未检测</span>
+                <span id="signal-health-text" class="signal-health-text">请先进行连通性检查。</span>
+            </div>
+            <div class="pipeline-actions signal-actions-inline">
+                <button class="btn soft" onclick="saveSignalSettings(true)">保存设置</button>
+                <button class="btn primary" onclick="refreshSignalHealth(true)">连通检测</button>
+                <button class="btn warn" onclick="clearSignalConversation()">清空会话</button>
+            </div>
+        </div>
+
+        <div class="signal-grid">
+            <div class="signal-column">
+                    <div class="signal-card">
+                        <div class="signal-card-title">相位时间控制</div>
+                        <div class="signal-placeholder">支持三种模式：private_timing（三帧时长写入）、download_cmts（全方案下发）、generate_cmts（基于模板生成新方案文件）。</div>
+                        <div class="signal-placeholder">如果你想具体控制“哪个相位放行哪个路口”，请使用 generate_cmts：前端编辑相位语义和通道绑定，后端生成新的 `.cmts` 文件。</div>
+                        <div class="signal-phase-guide">
+                            <div class="signal-phase-guide-title">双环语义与对齐规则</div>
+                            <div class="signal-phase-guide-line"><strong>Ring1</strong>: P1 -> P6 -> 屏障 P3（P3 对应 P5）</div>
+                            <div class="signal-phase-guide-line"><strong>Ring2</strong>: P2 -> P4 -> 屏障 P5（P5 = P3）</div>
+                            <div class="signal-phase-guide-line">环 1 与环 2 同时运行，屏障点和起始点需保持对齐。</div>
+                            <div class="signal-phase-guide-title">相位通行语义说明</div>
+                            <div class="signal-phase-guide-line"><strong>P1</strong>: 西北左转，东直行</div>
+                            <div class="signal-phase-guide-line"><strong>P2</strong>: 南进口人行道</div>
+                            <div class="signal-phase-guide-line"><strong>P3</strong>: 东进口左转，南进口直行</div>
+                            <div class="signal-phase-guide-line"><strong>P4</strong>: 东进口人行道</div>
+                            <div class="signal-phase-guide-line"><strong>P5</strong>: 西北进口人行道</div>
+                            <div class="signal-phase-guide-line"><strong>P6</strong>: 南进口左转，西进口直行</div>
+                            <div class="signal-phase-guide-line">示例时长: Ring1(P1=20s, P6=20s, P3=20s), Ring2(P2=20s, P4=20s, P5=20s)。</div>
+                        </div>
+                        <div class="pipeline-form signal-form">
+                            <div class="field">
+                                <label>发送模式</label>
+                                <select id="signal-send-mode">
+                                    <option value="private_timing">private_timing（三帧时长写入）</option>
+                                    <option value="download_cmts">download_cmts（全方案下发）</option>
+                                    <option value="generate_cmts">generate_cmts（生成新方案）</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label>方案骨架预设</label>
+                                <select id="signal-cmts-profile-preset">
+                                    <option value="custom">自定义 Replay 路径</option>
+                                    <option value="conflict">conflict（冲突方案）</option>
+                                    <option value="normal">normal（正常方案）</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label>Replay Profile（全方案）</label>
+                                <input id="signal-cmts-replay-profile" type="text" value="" placeholder="/app/docs/examples/replay_conflict.json">
+                            </div>
+                            <div class="field">
+                                <label>模板 `.cmts` 路径（生成方案）</label>
+                                <input id="signal-cmts-template-path" type="text" value="" placeholder="/app/docs/examples/conflict_6phase_manual.cmts">
+                            </div>
+                            <div class="field">
+                                <label>输出 `.cmts` 路径（生成方案）</label>
+                                <input id="signal-cmts-output-path" type="text" value="" placeholder="/app/generated_cmts/custom_plan.cmts">
+                            </div>
+                            <div class="field">
+                                <label>P1 西北左转 + 东直行</label>
+                                <input id="signal-phase-p1" type="text" value="" placeholder="例如 12">
+                            </div>
+                            <div class="field">
+                                <label>P2 南进口人行道</label>
+                                <input id="signal-phase-p2" type="text" value="" placeholder="例如 8">
+                            </div>
+                            <div class="field">
+                                <label>P3 东进口左转 + 南进口直行</label>
+                                <input id="signal-phase-p3" type="text" value="" placeholder="例如 10">
+                            </div>
+                            <div class="field">
+                                <label>P4 东进口人行道（自动推导）</label>
+                                <input id="signal-phase-p4" type="text" value="" readonly placeholder="由 p1+p6-p2 计算">
+                            </div>
+                            <div class="field">
+                                <label>P6 南进口左转 + 西进口直行</label>
+                                <input id="signal-phase-p6" type="text" value="" placeholder="例如 18">
+                            </div>
+                            <div class="field">
+                                <label>P7 Ring2 虚相位 / 补周期</label>
+                                <input id="signal-phase-p7" type="text" value="" placeholder="例如 30">
+                            </div>
+                            <div class="field">
+                                <label>P8 Ring3 虚相位 / 补周期</label>
+                                <input id="signal-phase-p8" type="text" value="" placeholder="例如 65">
+                            </div>
+                            <div class="field">
+                                <label>Seq (可选)</label>
+                                <input id="signal-phase-seq" type="text" value="" placeholder="0-255">
+                            </div>
+                            <div class="field">
+                                <label>Gap ms</label>
+                                <input id="signal-phase-gap-ms" type="number" min="0" max="1000" value="30">
+                            </div>
+                            <div class="field">
+                                <label>ACK Timeout (s)</label>
+                                <input id="signal-phase-ack-timeout" type="number" min="0.1" max="30" step="0.1" value="1.0">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label>数据上下文（可选 JSON）</label>
+                            <textarea id="signal-phase-context" placeholder='{"vehicle_count": 32, "queue_length": 18, "avg_delay": 21.4}'></textarea>
+                        </div>
+                        <div class="field">
+                            <label>推理目标（可选）</label>
+                            <input id="signal-phase-objective" type="text" value="" placeholder="例如：降低主路排队并保持行人安全">
+                        </div>
+                        <div class="field">
+                            <label>相位语义 JSON（生成方案）</label>
+                            <textarea id="signal-phase-semantics-json" placeholder='{"1":{"ring":1,"channels":[1,7],"description":"西北左转 + 东直行"}}'></textarea>
+                        </div>
+                        <div class="field">
+                            <label>通道语义 JSON（生成方案）</label>
+                            <textarea id="signal-channel-map-json" placeholder='{"1":{"approach":"西北进口","movement":"左转","type":"motor"}}'></textarea>
+                        </div>
+                        <div class="check-row">
+                            <label class="check"><input id="signal-phase-verify-ack" type="checkbox" checked> 校验 ACK</label>
+                            <label class="check"><input id="signal-generate-download-after" type="checkbox"> 生成后立即下发（高风险）</label>
+                        </div>
+                        <div class="pipeline-actions">
+                            <button class="btn soft" onclick="previewSignalPhaseRequest()">预览推理请求</button>
+                            <button class="btn warn" id="signal-send-phase-btn" onclick="sendSignalTimingPreset()">发送配时请求</button>
+                        </div>
+                        <div id="signal-phase-send-status" class="signal-send-status idle">尚未发送相位时间。</div>
+                    </div>
+
+                <div class="signal-card">
+                    <div class="signal-card-title signal-card-title-row">
+                        <span>实时相位 / 灯态</span>
+                        <span class="signal-status-wrap signal-realtime-status-wrap">
+                            <span class="signal-health-pill" id="signal-realtime-pill">离线</span>
+                            <span class="signal-health-text" id="signal-realtime-text">等待首次读取...</span>
+                        </span>
+                    </div>
+                    <div class="signal-realtime-board" id="signal-realtime-state" data-state="bad" data-lamp="unknown">
+                        <div class="signal-realtime-table-wrap">
+                            <table class="signal-realtime-table" aria-label="实时相位状态表">
+                                <thead>
+                                    <tr>
+                                        <th>相位</th>
+                                        <th>状态</th>
+                                        <th>灯态</th>
+                                        <th>已过</th>
+                                        <th>剩余</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="signal-realtime-row" id="signal-realtime-row-1">
+                                        <td><span class="signal-realtime-phase-chip">P1</span></td>
+                                        <td><span class="signal-realtime-dot signal-realtime-dot-red" id="signal-realtime-dot-1"></span><span id="signal-realtime-status-1">待读取</span></td>
+                                        <td id="signal-realtime-lamp-1">--</td>
+                                        <td id="signal-realtime-elapsed-1">--</td>
+                                        <td id="signal-realtime-remaining-1">--</td>
+                                    </tr>
+                                    <tr class="signal-realtime-row" id="signal-realtime-row-2">
+                                        <td><span class="signal-realtime-phase-chip">P2</span></td>
+                                        <td><span class="signal-realtime-dot signal-realtime-dot-red" id="signal-realtime-dot-2"></span><span id="signal-realtime-status-2">待读取</span></td>
+                                        <td id="signal-realtime-lamp-2">--</td>
+                                        <td id="signal-realtime-elapsed-2">--</td>
+                                        <td id="signal-realtime-remaining-2">--</td>
+                                    </tr>
+                                    <tr class="signal-realtime-row" id="signal-realtime-row-3">
+                                        <td><span class="signal-realtime-phase-chip">P3</span></td>
+                                        <td><span class="signal-realtime-dot signal-realtime-dot-red" id="signal-realtime-dot-3"></span><span id="signal-realtime-status-3">待读取</span></td>
+                                        <td id="signal-realtime-lamp-3">--</td>
+                                        <td id="signal-realtime-elapsed-3">--</td>
+                                        <td id="signal-realtime-remaining-3">--</td>
+                                    </tr>
+                                    <tr class="signal-realtime-row" id="signal-realtime-row-4">
+                                        <td><span class="signal-realtime-phase-chip">P4</span></td>
+                                        <td><span class="signal-realtime-dot signal-realtime-dot-red" id="signal-realtime-dot-4"></span><span id="signal-realtime-status-4">待读取</span></td>
+                                        <td id="signal-realtime-lamp-4">--</td>
+                                        <td id="signal-realtime-elapsed-4">--</td>
+                                        <td id="signal-realtime-remaining-4">--</td>
+                                    </tr>
+                                    <tr class="signal-realtime-row" id="signal-realtime-row-5">
+                                        <td><span class="signal-realtime-phase-chip">P5</span></td>
+                                        <td><span class="signal-realtime-dot signal-realtime-dot-red" id="signal-realtime-dot-5"></span><span id="signal-realtime-status-5">待读取</span></td>
+                                        <td id="signal-realtime-lamp-5">--</td>
+                                        <td id="signal-realtime-elapsed-5">--</td>
+                                        <td id="signal-realtime-remaining-5">--</td>
+                                    </tr>
+                                    <tr class="signal-realtime-row" id="signal-realtime-row-6">
+                                        <td><span class="signal-realtime-phase-chip">P6</span></td>
+                                        <td><span class="signal-realtime-dot signal-realtime-dot-red" id="signal-realtime-dot-6"></span><span id="signal-realtime-status-6">待读取</span></td>
+                                        <td id="signal-realtime-lamp-6">--</td>
+                                        <td id="signal-realtime-elapsed-6">--</td>
+                                        <td id="signal-realtime-remaining-6">--</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="signal-realtime-meta">
+                            <div class="signal-realtime-mini-light" id="signal-realtime-light">
+                                <span class="signal-realtime-bulb red"></span>
+                                <span class="signal-realtime-bulb amber"></span>
+                                <span class="signal-realtime-bulb green"></span>
+                            </div>
+                            <div class="signal-realtime-summary-block">
+                                <div class="signal-realtime-summary-title">摘要</div>
+                                <div class="signal-realtime-summary" id="signal-realtime-raw">等待首次读取...</div>
+                                <div class="signal-realtime-summary" id="signal-realtime-status-text">待读取</div>
+                                <div class="signal-realtime-subvalue" id="signal-realtime-updated">--</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pipeline-actions signal-actions-inline">
+                        <button class="btn soft" onclick="refreshSignalRealtimeState(true)">立即刷新状态</button>
+                    </div>
+                </div>
+
+                <div class="signal-card">
+                    <div class="signal-card-title">控制配置</div>
+                    <div class="pipeline-form signal-form">
+                        <div class="field">
+                            <label>Agent Base URL</label>
+                            <input id="signal-agent-base-url" type="text" value="http://nl-agent:9001">
+                        </div>
+                        <div class="field">
+                            <label>Session ID</label>
+                            <input id="signal-session-id" type="text" value="traffic-console-default">
+                        </div>
+                        <div class="field">
+                            <label>安全级别</label>
+                            <select id="signal-profile">
+                                <option value="readonly">readonly</option>
+                                <option value="low-risk">low-risk</option>
+                                <option value="high-risk">high-risk</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Agent Timeout (s)</label>
+                            <input id="signal-agent-timeout" type="number" min="1" max="120" value="45">
+                        </div>
+                        <div class="field">
+                            <label>Controller Host</label>
+                            <input id="signal-controller-host" type="text" value="172.25.157.48" placeholder="172.25.157.48">
+                        </div>
+                        <div class="field">
+                            <label>Controller Port</label>
+                            <input id="signal-controller-port" type="number" min="1" max="65535" value="38083">
+                        </div>
+                        <div class="field">
+                            <label>Controller Timeout (s)</label>
+                            <input id="signal-controller-timeout" type="number" min="0.1" max="10" step="0.1" value="1.0">
+                        </div>
+                        <div class="field">
+                            <label>轮询间隔 (s)</label>
+                            <input id="signal-controller-poll-interval" type="number" min="1" max="60" step="0.5" value="6.0">
+                        </div>
+                    </div>
+                    <div class="check-row">
+                        <label class="check"><input id="signal-high-risk-confirmed" type="checkbox"> 我已确认本次高风险操作</label>
+                    </div>
+                </div>
+
+                <div class="signal-card">
+                    <div class="signal-card-title">LLM 控制对话</div>
+                    <div id="signal-chat-log" class="signal-chat-log"></div>
+                    <div class="signal-chat-input-wrap">
+                        <textarea id="signal-chat-input" placeholder="例如：读取当前状态并告诉我控制模式"></textarea>
+                    </div>
+                    <div class="pipeline-actions">
+                        <button class="btn ok" id="signal-send-btn" onclick="sendSignalMessage()">发送控制指令</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="signal-column">
+                <div class="signal-card">
+                    <div class="signal-card-title">视频流接入</div>
+                    <div class="pipeline-form signal-form">
+                        <div class="field">
+                            <label>Stream Base URL</label>
+                            <input id="signal-stream-base-url" type="text" value="https://172.25.157.48:18083" placeholder="https://172.25.157.48:18083">
+                        </div>
+                        <div class="field">
+                            <label>设备 ID</label>
+                            <input id="signal-stream-device-id" type="text" value="2-27" placeholder="2-27">
+                        </div>
+                        <div class="field">
+                            <label>Channel</label>
+                            <input id="signal-stream-channel" type="number" min="0" max="64" value="0">
+                        </div>
+                        <div class="field">
+                            <label>自动生成 URL</label>
+                            <input id="signal-auto-stream-url" type="text" value="" readonly>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>Video Stream URL (手动覆盖)</label>
+                        <input id="signal-video-stream-url" type="text" value="" placeholder="https://.../index.m3u8 或 rtsp://...">
+                    </div>
+                    <div class="pipeline-actions">
+                        <button class="btn soft" onclick="applyAutoSignalStream()">应用自动链接</button>
+                        <button class="btn primary" onclick="playManualSignalStream()">播放手动链接</button>
+                        <button class="btn warn" onclick="stopSignalStream()">停止播放</button>
+                        <a class="settings-btn" id="signal-open-stream-link" href="#" target="_blank" rel="noopener">打开流地址</a>
+                    </div>
+                    <div class="signal-placeholder" id="signal-video-status">未播放。优先可用手动链接；为空时使用自动拼接链接。</div>
+                    <div class="signal-video-stage" id="signal-video-stage">
+                        <video id="signal-video-player" controls autoplay muted playsinline></video>
+                    </div>
+                </div>
+
+                <div class="signal-card">
+                    <div class="signal-card-title">可视化接入预留</div>
+                    <div class="field">
+                        <label>Visualization API URL</label>
+                        <input id="signal-viz-api-url" type="text" value="" placeholder="http://.../api/viz">
+                    </div>
+                    <div class="signal-placeholder">后续可挂载时序图、相位图、路口状态拓扑、控制建议解释图。</div>
+                    <div class="signal-placeholder signal-stage">VISUALIZATION STAGE RESERVED</div>
+                </div>
+
+                <div class="signal-card">
+                    <div class="signal-card-title">Agent 返回详情</div>
+                    <pre id="signal-response-detail" class="signal-detail">等待请求...</pre>
+                </div>
             </div>
         </div>
     </div>
@@ -302,6 +631,15 @@
             <div class="field"><label>pipeline.py 路径</label><input type="text" id="input-pipeline-script"></div>
             <div class="field"><label>Python 可执行路径</label><input type="text" id="input-pipeline-python"></div>
             <div class="field"><label>选择治理运行记录 (run_*.jsonl)</label><select id="input-run"></select></div>
+            <div class="field"><label>信号机 Agent Base URL</label><input type="text" id="input-signal-agent-url"></div>
+            <div class="field"><label>信号机默认 Session ID</label><input type="text" id="input-signal-session"></div>
+            <div class="field"><label>信号机默认安全级别</label><select id="input-signal-profile"><option value="readonly">readonly</option><option value="low-risk">low-risk</option><option value="high-risk">high-risk</option></select></div>
+            <div class="field"><label>信号机 Agent Timeout (s)</label><input type="number" min="1" max="120" id="input-signal-timeout"></div>
+            <div class="field"><label>视频流 URL 预留</label><input type="text" id="input-signal-video-url"></div>
+            <div class="field"><label>视频流 Base URL</label><input type="text" id="input-signal-stream-base-url"></div>
+            <div class="field"><label>视频流设备 ID</label><input type="text" id="input-signal-stream-device-id"></div>
+            <div class="field"><label>视频流 Channel</label><input type="number" min="0" max="64" id="input-signal-stream-channel"></div>
+            <div class="field"><label>可视化 API URL 预留</label><input type="text" id="input-signal-viz-url"></div>
         </div>
         <div class="modal-actions">
             <button class="btn-modal secondary" onclick="refreshGovernanceRuns()">刷新运行记录</button>
@@ -313,7 +651,8 @@
 
 <script defer src="{{ url_for('static', filename='js/index/core.js') }}"></script>
 <script defer src="{{ url_for('static', filename='js/index/governance.js') }}"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script defer src="{{ url_for('static', filename='js/index/signal.js') }}"></script>
 <script defer src="{{ url_for('static', filename='js/index/ops.js') }}"></script>
 </body>
 </html>
-

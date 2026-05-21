@@ -26,7 +26,7 @@ class TrafficGovernancePipeline:
         model_name: str = "qwen2-vl",
         llm_api_key: str = "",
         enable_vlm: bool = True,
-        llm_timeout: int = 12,
+        llm_timeout: int = 25,
         vlm_trigger_mode: str = "critical_sample",
         vlm_max_calls: int = 1200,
         vlm_max_ratio: float = 0.08,
@@ -320,7 +320,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--llm-api-key", default="", help="Optional bearer token for LLM API")
     parser.add_argument("--disable-vlm-image", action="store_true", help="Disable raw-image embedding for VLM requests")
-    parser.add_argument("--llm-timeout", type=int, default=12, help="LLM request timeout in seconds")
+    parser.add_argument("--llm-timeout", type=int, default=25, help="LLM request timeout in seconds")
     parser.add_argument(
         "--vlm-trigger-mode",
         default="critical_sample",

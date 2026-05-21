@@ -43,8 +43,8 @@ function bindPipelineFormEvents() {
         document.getElementById('run-output-dir').value = cfg.gov_outputs_dir || '';
         document.getElementById('run-max-frames').value = cfg.pipeline_max_frames || 20;
         document.getElementById('run-model').value = cfg.pipeline_model || 'qwen2-vl';
-        document.getElementById('run-llm-api-url').value = cfg.pipeline_llm_api_url || 'http://8.138.133.71:8080/v1/chat/completions';
-        document.getElementById('run-llm-timeout').value = Number(cfg.pipeline_llm_timeout || 12);
+        document.getElementById('run-llm-api-url').value = cfg.pipeline_llm_api_url || 'http://host.docker.internal:8001/v1/chat/completions';
+        document.getElementById('run-llm-timeout').value = Number(cfg.pipeline_llm_timeout || 25);
         document.getElementById('run-vlm-trigger-mode').value = cfg.pipeline_vlm_trigger_mode || 'critical_sample';
         document.getElementById('run-vlm-max-calls').value = Number(cfg.pipeline_vlm_max_calls || 1200);
         document.getElementById('run-vlm-max-ratio').value = Number(cfg.pipeline_vlm_max_ratio || 0.08);
@@ -179,6 +179,13 @@ function bindPipelineFormEvents() {
     async function loadCardByMode() {
         resetAllZooms();
         setActionLabels();
+        if (currentMode === 'signal') {
+            await loadSignalConsole();
+            updateProgressAndMeta();
+            updateUndoButton();
+            return;
+        }
+        setSignalLayoutActive(false);
         if (currentMode === 'governance') {
             await loadGovernanceCard();
         } else {
@@ -188,7 +195,8 @@ function bindPipelineFormEvents() {
     }
 
     function switchMode(mode) {
-        currentMode = mode;
+        const nextMode = mode === 'relation' || mode === 'signal' ? mode : 'governance';
+        currentMode = nextMode;
         updateModeButtons();
         applyBevRenderMode(true);
         fetchStates().then(() => loadCardByMode());
@@ -217,8 +225,10 @@ function bindPipelineFormEvents() {
                 return;
             }
             await submitGovernance('confirmed');
-        } else {
+        } else if (currentMode === 'relation') {
             await submitRelation('correct');
+        } else {
+            await sendSignalMessage();
         }
     }
 
@@ -229,8 +239,11 @@ function bindPipelineFormEvents() {
                 return;
             }
             await submitGovernance('suspect');
-        } else {
+        } else if (currentMode === 'relation') {
             await submitRelation('incorrect');
+        } else {
+            const confirmed = document.getElementById('signal-high-risk-confirmed');
+            if (confirmed) confirmed.checked = !confirmed.checked;
         }
     }
 
@@ -241,8 +254,10 @@ function bindPipelineFormEvents() {
                 return;
             }
             await submitGovernance('skip');
-        } else {
+        } else if (currentMode === 'relation') {
             await submitRelation('skip');
+        } else {
+            clearSignalConversation();
         }
     }
 
@@ -286,7 +301,7 @@ function bindPipelineFormEvents() {
                 max_frames: Number(document.getElementById('run-max-frames').value || 20),
                 model: document.getElementById('run-model').value,
                 llm_api_url: document.getElementById('run-llm-api-url').value,
-                llm_timeout: Number(document.getElementById('run-llm-timeout').value || 12),
+                llm_timeout: Number(document.getElementById('run-llm-timeout').value || 25),
                 vlm_trigger_mode: document.getElementById('run-vlm-trigger-mode').value,
                 vlm_max_calls: Number(document.getElementById('run-vlm-max-calls').value || 1200),
                 vlm_max_ratio: Number(document.getElementById('run-vlm-max-ratio').value || 0.08),
@@ -328,6 +343,15 @@ function bindPipelineFormEvents() {
         document.getElementById('input-ts-dir').value = cfg.traffic_system_dir || '';
         document.getElementById('input-pipeline-script').value = cfg.pipeline_script || '';
         document.getElementById('input-pipeline-python').value = cfg.pipeline_python || '';
+        document.getElementById('input-signal-agent-url').value = cfg.signal_agent_base_url || 'http://nl-agent:9001';
+        document.getElementById('input-signal-session').value = cfg.signal_default_session_id || 'traffic-console-default';
+        document.getElementById('input-signal-profile').value = cfg.signal_default_profile || 'readonly';
+        document.getElementById('input-signal-timeout').value = Number(cfg.signal_agent_timeout || 45);
+        document.getElementById('input-signal-video-url').value = cfg.signal_video_stream_url || '';
+        document.getElementById('input-signal-stream-base-url').value = cfg.signal_stream_base_url || 'https://172.25.157.48:18083';
+        document.getElementById('input-signal-stream-device-id').value = cfg.signal_stream_device_id || '2-27';
+        document.getElementById('input-signal-stream-channel').value = Number(cfg.signal_stream_channel || 0);
+        document.getElementById('input-signal-viz-url').value = cfg.signal_visualization_api_url || '';
 
         const runSelect = document.getElementById('input-run');
         runSelect.innerHTML = '';
@@ -382,12 +406,21 @@ function bindPipelineFormEvents() {
             pipeline_use_llm: document.getElementById('run-use-llm').checked,
             pipeline_llm_api_url: document.getElementById('run-llm-api-url').value,
             pipeline_enable_vlm_image: document.getElementById('run-enable-vlm-image').checked,
-            pipeline_llm_timeout: Number(document.getElementById('run-llm-timeout').value || 12),
+            pipeline_llm_timeout: Number(document.getElementById('run-llm-timeout').value || 25),
             pipeline_vlm_trigger_mode: document.getElementById('run-vlm-trigger-mode').value,
             pipeline_vlm_max_calls: Number(document.getElementById('run-vlm-max-calls').value || 1200),
             pipeline_vlm_max_ratio: Number(document.getElementById('run-vlm-max-ratio').value || 0.08),
             pipeline_vlm_sample_every_n: Number(document.getElementById('run-vlm-sample-every-n').value || 60),
             pipeline_generate_report: document.getElementById('run-gen-report').checked,
+            signal_agent_base_url: document.getElementById('input-signal-agent-url').value,
+            signal_default_session_id: document.getElementById('input-signal-session').value,
+            signal_default_profile: document.getElementById('input-signal-profile').value,
+            signal_agent_timeout: Number(document.getElementById('input-signal-timeout').value || 45),
+            signal_video_stream_url: document.getElementById('input-signal-video-url').value,
+            signal_stream_base_url: document.getElementById('input-signal-stream-base-url').value,
+            signal_stream_device_id: document.getElementById('input-signal-stream-device-id').value,
+            signal_stream_channel: Number(document.getElementById('input-signal-stream-channel').value || 0),
+            signal_visualization_api_url: document.getElementById('input-signal-viz-url').value,
         };
 
         await apiPost('/api/config', payload);
@@ -519,6 +552,8 @@ function bindPipelineFormEvents() {
         if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
         if (event.ctrlKey || event.metaKey || event.altKey) return;
 
+        if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') return;
+
         const key = event.key.toLowerCase();
         if (key === 'y') await handlePositive();
         if (key === 'n') await handleNegative();
@@ -526,6 +561,7 @@ function bindPipelineFormEvents() {
         if (key === 'b' || key === 'arrowleft') await undoMark();
         if (key === '1') switchMode('governance');
         if (key === '2') switchMode('relation');
+        if (key === '3') switchMode('signal');
     });
 
     window.onload = async () => {
@@ -543,6 +579,7 @@ function bindPipelineFormEvents() {
         }
 
         bindPipelineFormEvents();
+        bindSignalConsoleEvents();
         clearSlowdownColumns();
         await fetchStates({ refreshSettings: false });
         updateModeButtons();

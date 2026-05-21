@@ -75,7 +75,7 @@ class EventAgent:
         use_llm: bool = True,
         llm_api_url: str = "http://8.138.133.71:8080/v1/chat/completions",
         model_name: str = "qwen2-vl",
-        request_timeout: int = 12,
+        request_timeout: int = 25,
         llm_api_key: str = "",
         enable_vlm: bool = True,
         llm_trigger_mode: str = "critical_sample",
@@ -726,13 +726,43 @@ class EventAgent:
             return "\n".join(chunks).strip()
         return ""
 
+    def _parse_chat_completion_response(self, response: requests.Response) -> str:
+        if response.status_code != 200:
+            response_preview = response.text[:500]
+            return f"[LLM 异常] 状态码: {response.status_code}, body: {response_preview}"
+
+        try:
+            result = response.json()
+        except ValueError:
+            return f"[LLM 异常] 响应不是合法 JSON: {response.text[:500]}"
+
+        choices = result.get("choices", [])
+        if isinstance(choices, list) and choices:
+            first_choice = choices[0] if isinstance(choices[0], dict) else {}
+            message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
+            content = self._extract_chat_content(message.get("content", ""))
+            if content:
+                return content
+
+        fallback_content = str(result.get("response", "")).strip()
+        if fallback_content:
+            return fallback_content
+        return "[LLM 异常] 返回结构缺少可解析内容(choices/message/content)"
+
     def _call_chat_completions(
         self,
         system_prompt: str,
         user_prompt: str,
         raw_image_path: Optional[str] = None,
     ) -> str:
-        user_text = f"当前路口状态:\n{user_prompt}\n\n请给出治理建议："
+        user_text = (
+            "请基于以下路口状态进行研判。\n"
+            f"当前路口状态:\n{user_prompt}\n\n"
+            "请严格输出3句话：\n"
+            "1) 主要缓行根因（结合可观测证据）；\n"
+            "2) 两条可立即执行的治理动作（写明作用对象与预期效果）；\n"
+            "3) 是否需要信号配时优化（需要/暂不需要）及一句理由。"
+        )
         user_content: Any = user_text
 
         if self.enable_vlm and raw_image_path:
@@ -752,7 +782,8 @@ class EventAgent:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ],
-            "temperature": 0.2,
+            "temperature": 0.0,
+            "max_tokens": 160,
         }
         headers = {"Content-Type": "application/json"}
         if self.llm_api_key:
@@ -765,28 +796,32 @@ class EventAgent:
                 json=payload,
                 timeout=self.request_timeout,
             )
-            if response.status_code != 200:
-                response_preview = response.text[:500]
-                return f"[LLM 异常] 状态码: {response.status_code}, body: {response_preview}"
-
-            try:
-                result = response.json()
-            except ValueError:
-                return f"[LLM 异常] 响应不是合法 JSON: {response.text[:500]}"
-
-            choices = result.get("choices", [])
-            if isinstance(choices, list) and choices:
-                first_choice = choices[0] if isinstance(choices[0], dict) else {}
-                message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
-                content = self._extract_chat_content(message.get("content", ""))
-                if content:
-                    return content
-
-            # fallback:兼容某些本地服务保留的 response 字段
-            fallback_content = str(result.get("response", "")).strip()
-            if fallback_content:
-                return fallback_content
-            return "[LLM 异常] 返回结构缺少可解析内容(choices/message/content)"
+            return self._parse_chat_completion_response(response)
+        except requests.exceptions.ReadTimeout as exc:
+            # 图像推理超时时降级为文本推理，避免整帧失败。
+            if isinstance(user_content, list):
+                fallback_payload = {
+                    "model": self.model_name,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_text},
+                    ],
+                    "temperature": 0.0,
+                    "max_tokens": 120,
+                }
+                try:
+                    fallback_timeout = max(self.request_timeout, 25)
+                    fallback_resp = requests.post(
+                        self.llm_api_url,
+                        headers=headers,
+                        json=fallback_payload,
+                        timeout=fallback_timeout,
+                    )
+                    fallback_text = self._parse_chat_completion_response(fallback_resp)
+                    return f"[LLM 图像超时，已自动降级文本推理] {fallback_text}"
+                except requests.exceptions.RequestException as fallback_exc:
+                    return f"[LLM 服务未响应] 首次图像请求超时({exc})；降级文本请求失败({fallback_exc})"
+            return f"[LLM 服务未响应] {exc}"
         except requests.exceptions.RequestException as exc:
             return f"[LLM 服务未响应] {exc}"
 
@@ -830,10 +865,10 @@ class EventAgent:
                 allowed, budget_state = self._consume_llm_budget()
                 if allowed:
                     sys_prompt = (
-                        "你是交通缓行分析助手。"
-                        "请基于 following 结构给出缓行原因判断和两条可执行建议，"
-                        "并明确是否需要信号配时优化。"
-                        "回答控制在3句话内。"
+                        "你是资深城市交通治理分析助手。"
+                        "你的任务是对路口缓行进行根因定位并给出可落地动作。"
+                        "优先关注: 车道冲突、信号放行错配、行人过街干扰、排队外溢。"
+                        "输出必须专业、可执行、避免空话，并严格控制为3句话。"
                     )
                     llm_reply = self._call_chat_completions(
                         system_prompt=sys_prompt,

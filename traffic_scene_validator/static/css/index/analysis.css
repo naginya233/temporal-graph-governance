@@ -315,6 +315,530 @@
             padding: 4px 2px;
         }
 
+                .signal-panel {
+                    display: none;
+                }
+
+                .signal-topbar {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                    margin-bottom: 10px;
+                }
+
+                .signal-status-wrap {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+
+                .signal-health-pill {
+                    border-radius: 999px;
+                    border: 1px solid var(--line);
+                    padding: 3px 10px;
+                    font-size: 12px;
+                    font-weight: 800;
+                    background: var(--soft-2);
+                    color: var(--muted);
+                }
+
+                .signal-health-pill.ok {
+                    background: rgba(52, 199, 89, 0.16);
+                    color: #147a3f;
+                    border-color: rgba(52, 199, 89, 0.38);
+                }
+
+                .signal-health-pill.bad {
+                    background: rgba(255, 59, 48, 0.12);
+                    color: #b42318;
+                    border-color: rgba(255, 59, 48, 0.32);
+                }
+
+                .signal-health-pill.pending {
+                    background: rgba(255, 149, 0, 0.12);
+                    color: #9a5b00;
+                    border-color: rgba(255, 149, 0, 0.28);
+                }
+
+                .signal-health-text {
+                    font-size: 12px;
+                    color: var(--muted);
+                    font-weight: 700;
+                }
+
+                .signal-grid {
+                    display: grid;
+                    grid-template-columns: 1.2fr 1fr;
+                    gap: 12px;
+                }
+
+                .signal-column {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
+
+                .signal-card {
+                    border: 1px solid var(--line);
+                    border-radius: 12px;
+                    background: var(--soft-2);
+                    padding: 10px;
+                }
+
+                .signal-card-title {
+                    font-size: 13px;
+                    font-weight: 800;
+                    color: var(--ink);
+                    margin-bottom: 8px;
+                }
+
+                .signal-card-title-row {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                }
+
+                .signal-form {
+                    grid-template-columns: repeat(2, minmax(150px, 1fr));
+                }
+
+                .signal-actions-inline {
+                    margin-top: 0;
+                }
+
+                .signal-chat-log {
+                    border: 1px solid var(--line);
+                    border-radius: 10px;
+                    min-height: 260px;
+                    max-height: 360px;
+                    overflow: auto;
+                    padding: 8px;
+                    background: var(--card-solid);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+
+                .signal-msg {
+                    border-radius: 10px;
+                    padding: 8px;
+                    font-size: 12px;
+                    line-height: 1.45;
+                    border: 1px solid var(--line);
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                }
+
+                .signal-msg.user {
+                    background: rgba(0, 122, 255, 0.1);
+                    border-color: rgba(0, 122, 255, 0.2);
+                }
+
+                .signal-msg.assistant {
+                    background: rgba(52, 199, 89, 0.12);
+                    border-color: rgba(52, 199, 89, 0.2);
+                }
+
+                .signal-msg.system {
+                    background: rgba(148, 163, 184, 0.12);
+                    border-color: rgba(148, 163, 184, 0.24);
+                    color: var(--muted);
+                }
+
+                .signal-chat-input-wrap textarea {
+                    width: 100%;
+                    min-height: 88px;
+                    resize: vertical;
+                    border: 1px solid var(--line);
+                    border-radius: 10px;
+                    padding: 8px 10px;
+                    font-size: 13px;
+                    line-height: 1.45;
+                    font-family: var(--font);
+                    background: var(--soft);
+                    color: var(--ink);
+                    outline: none;
+                }
+
+                .signal-chat-input-wrap textarea:focus {
+                    border-color: var(--primary);
+                    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.13);
+                }
+
+                .signal-placeholder {
+                    margin-top: 8px;
+                    border: 1px dashed var(--line);
+                    border-radius: 10px;
+                    padding: 10px;
+                    font-size: 12px;
+                    color: var(--muted);
+                    background: var(--soft);
+                }
+
+                .signal-phase-guide {
+                    margin-top: 8px;
+                    border: 1px solid var(--line);
+                    border-radius: 10px;
+                    padding: 10px;
+                    background: var(--card-solid);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                }
+
+                .signal-phase-guide-title {
+                    font-size: 12px;
+                    font-weight: 800;
+                    color: var(--ink);
+                    margin-bottom: 2px;
+                }
+
+                .signal-phase-guide-line {
+                    font-size: 12px;
+                    color: var(--muted);
+                    line-height: 1.45;
+                }
+
+                .signal-send-status {
+                    margin-top: 8px;
+                    border-radius: 8px;
+                    border: 1px solid var(--line);
+                    padding: 8px 10px;
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: var(--muted);
+                    background: var(--soft);
+                }
+
+                .signal-send-status.pending {
+                    border-color: rgba(255, 149, 0, 0.3);
+                    background: rgba(255, 149, 0, 0.1);
+                    color: #9a5b00;
+                }
+
+                .signal-send-status.ok {
+                    border-color: rgba(52, 199, 89, 0.35);
+                    background: rgba(52, 199, 89, 0.14);
+                    color: #147a3f;
+                }
+
+                .signal-send-status.bad {
+                    border-color: rgba(255, 59, 48, 0.34);
+                    background: rgba(255, 59, 48, 0.12);
+                    color: #b42318;
+                }
+
+                .signal-stage {
+                    min-height: 96px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    letter-spacing: 0.8px;
+                    font-weight: 800;
+                    color: #64748b;
+                }
+
+                .signal-realtime-status-wrap {
+                    justify-content: flex-end;
+                }
+
+                .signal-realtime-board {
+                    margin-top: 8px;
+                    padding: 8px 10px 10px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(148, 163, 184, 0.35);
+                    background: linear-gradient(180deg, rgba(245, 247, 250, 0.98), rgba(239, 244, 249, 0.98));
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+                }
+
+                .signal-realtime-table-wrap {
+                    overflow-x: auto;
+                }
+
+                .signal-realtime-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 12px;
+                    min-width: 560px;
+                }
+
+                .signal-realtime-table th,
+                .signal-realtime-table td {
+                    border: 1px solid rgba(191, 203, 217, 0.9);
+                    padding: 5px 8px;
+                    text-align: left;
+                    white-space: nowrap;
+                }
+
+                .signal-realtime-table th {
+                    background: linear-gradient(180deg, rgba(222, 230, 240, 0.95), rgba(206, 217, 231, 0.95));
+                    color: #31415b;
+                    font-weight: 800;
+                }
+
+                .signal-realtime-row td {
+                    background: rgba(255, 255, 255, 0.85);
+                    color: #334155;
+                }
+
+                .signal-realtime-row[data-active="true"] td {
+                    background: rgba(220, 252, 231, 0.75);
+                }
+
+                .signal-realtime-phase-chip {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-width: 28px;
+                    height: 20px;
+                    padding: 0 8px;
+                    border-radius: 999px;
+                    background: #e2e8f0;
+                    color: #0f172a;
+                    font-weight: 800;
+                }
+
+                .signal-realtime-dot {
+                    display: inline-block;
+                    width: 10px;
+                    height: 10px;
+                    margin-right: 6px;
+                    border-radius: 50%;
+                    vertical-align: middle;
+                    background: #94a3b8;
+                    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+                }
+
+                .signal-realtime-dot-red {
+                    background: #ef4444;
+                }
+
+                .signal-realtime-dot-amber {
+                    background: #f59e0b;
+                }
+
+                .signal-realtime-dot-green {
+                    background: #22c55e;
+                }
+
+                .signal-realtime-meta {
+                    display: grid;
+                    grid-template-columns: 56px minmax(0, 1fr);
+                    gap: 8px;
+                    margin-top: 8px;
+                    align-items: center;
+                }
+
+                .signal-realtime-mini-light {
+                    width: 46px;
+                    padding: 5px 4px;
+                    border-radius: 12px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                    align-items: center;
+                    background: linear-gradient(180deg, #1f2937, #0f172a);
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+                }
+
+                .signal-realtime-bulb {
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    opacity: 0.18;
+                    background: #64748b;
+                    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+                    transition: opacity 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+                }
+
+                .signal-realtime-bulb.red {
+                    background: #ef4444;
+                }
+
+                .signal-realtime-bulb.amber {
+                    background: #f59e0b;
+                }
+
+                .signal-realtime-bulb.green {
+                    background: #22c55e;
+                }
+
+                .signal-realtime-board[data-lamp="red"] .signal-realtime-bulb.red,
+                .signal-realtime-board[data-lamp="amber"] .signal-realtime-bulb.amber,
+                .signal-realtime-board[data-lamp="green"] .signal-realtime-bulb.green {
+                    opacity: 1;
+                    transform: scale(1.05);
+                }
+
+                .signal-realtime-board[data-lamp="red"] .signal-realtime-bulb.red {
+                    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+                }
+
+                .signal-realtime-board[data-lamp="amber"] .signal-realtime-bulb.amber {
+                    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+                }
+
+                .signal-realtime-board[data-lamp="green"] .signal-realtime-bulb.green {
+                    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+                }
+
+                .signal-realtime-summary-block {
+                    min-width: 0;
+                }
+
+                .signal-realtime-summary-title {
+                    font-size: 12px;
+                    font-weight: 800;
+                    color: #475569;
+                    margin-bottom: 2px;
+                }
+
+                .signal-realtime-summary {
+                    font-size: 12px;
+                    color: #334155;
+                    line-height: 1.35;
+                    word-break: break-word;
+                }
+
+                .signal-realtime-subvalue {
+                    margin-top: 2px;
+                    font-size: 11px;
+                    color: #64748b;
+                }
+
+                .signal-realtime-board[data-state="ok"] .signal-realtime-phase-chip {
+                    background: #dcfce7;
+                    color: #166534;
+                }
+
+                .signal-realtime-board[data-state="bad"] .signal-realtime-phase-chip {
+                    background: #fee2e2;
+                    color: #991b1b;
+                }
+
+                .signal-video-stage {
+                    margin-top: 8px;
+                    border: 1px solid var(--line);
+                    border-radius: 12px;
+                    background: #0b1220;
+                    overflow: hidden;
+                    min-height: 240px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .signal-video-stage video {
+                    width: 100%;
+                    height: 100%;
+                    min-height: 240px;
+                    background: #020617;
+                    object-fit: contain;
+                }
+
+                .signal-detail {
+                    margin: 0;
+                    border: 1px solid var(--line);
+                    border-radius: 10px;
+                    padding: 10px;
+                    font-size: 12px;
+                    line-height: 1.4;
+                    white-space: pre-wrap;
+                    font-family: Consolas, "Courier New", monospace;
+                    background: var(--card-solid);
+                    min-height: 170px;
+                    max-height: 290px;
+                    overflow: auto;
+                }
+
+                [data-theme="dark"] .signal-msg.user {
+                    background: rgba(94, 164, 255, 0.18);
+                    border-color: rgba(94, 164, 255, 0.3);
+                }
+
+                [data-theme="dark"] .signal-msg.assistant {
+                    background: rgba(83, 216, 124, 0.16);
+                    border-color: rgba(83, 216, 124, 0.3);
+                }
+
+                [data-theme="dark"] .signal-msg.system {
+                    background: rgba(148, 163, 184, 0.16);
+                    border-color: rgba(148, 163, 184, 0.26);
+                }
+
+                [data-theme="dark"] .signal-send-status.pending {
+                    color: #ffcf78;
+                }
+
+                [data-theme="dark"] .signal-send-status.ok {
+                    color: #88e5aa;
+                }
+
+                [data-theme="dark"] .signal-send-status.bad {
+                    color: #ff9f9a;
+                }
+
+                [data-theme="dark"] .signal-stage {
+                    color: #a5b4cc;
+                }
+
+                [data-theme="dark"] .signal-realtime-board {
+                    border-color: rgba(96, 165, 250, 0.22);
+                    background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.86));
+                }
+
+                [data-theme="dark"] .signal-realtime-table th {
+                    background: linear-gradient(180deg, rgba(51, 65, 85, 0.96), rgba(30, 41, 59, 0.96));
+                    color: #e2e8f0;
+                    border-color: rgba(71, 85, 105, 0.9);
+                }
+
+                [data-theme="dark"] .signal-realtime-table td {
+                    background: rgba(15, 23, 42, 0.82);
+                    color: #e2e8f0;
+                    border-color: rgba(71, 85, 105, 0.82);
+                }
+
+                [data-theme="dark"] .signal-realtime-row[data-active="true"] td {
+                    background: rgba(22, 101, 52, 0.22);
+                }
+
+                [data-theme="dark"] .signal-realtime-summary-title,
+                [data-theme="dark"] .signal-realtime-summary,
+                [data-theme="dark"] .signal-realtime-subvalue {
+                    color: #cbd5e1;
+                }
+
+                [data-theme="dark"] .signal-realtime-phase-chip {
+                    background: #1e293b;
+                    color: #e2e8f0;
+                }
+
+                [data-theme="dark"] .signal-realtime-board[data-state="ok"] .signal-realtime-phase-chip {
+                    background: rgba(22, 101, 52, 0.32);
+                    color: #bbf7d0;
+                }
+
+                [data-theme="dark"] .signal-realtime-board[data-state="bad"] .signal-realtime-phase-chip {
+                    background: rgba(153, 27, 27, 0.28);
+                    color: #fecaca;
+                }
+
+                @media (max-width: 1180px) {
+                    .signal-grid {
+                        grid-template-columns: 1fr;
+                    }
+
+                    .signal-form {
+                        grid-template-columns: 1fr;
+                    }
+                }
+
         html[data-motion="on"] body:not(.app-ready) .meta-row,
         html[data-motion="on"] body:not(.app-ready) #pipeline-panel,
         html[data-motion="on"] body:not(.app-ready) .banner,

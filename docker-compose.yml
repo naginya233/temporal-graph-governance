@@ -7,6 +7,8 @@ services:
     container_name: traffic-governance-web
     ports:
       - "5000:5000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       HOST: "0.0.0.0"
       PORT: "5000"
@@ -17,6 +19,26 @@ services:
       - ./traffic_scene_validator/validation_index.json:/app/traffic_scene_validator/validation_index.json
       - ./traffic_agent_system/outputs:/app/traffic_agent_system/outputs
       - /data/mydata/datasets/20260328_migrate:/data/mydata/datasets/20260328_migrate:ro
+    depends_on:
+      - nl-agent
+    restart: unless-stopped
+
+  nl-agent:
+    build:
+      context: ../ClawTLC
+      dockerfile: Dockerfile
+    image: clawtlc-nl-agent:latest
+    container_name: clawtlc-nl-agent
+    ports:
+      - "9001:9001"
+    volumes:
+      - ../ClawTLC/config/llm_agent.local.json:/app/config/llm_agent.local.json:ro
+      - ../ClawTLC/logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9001/health', timeout=2).read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     restart: unless-stopped
 
 # If your datasets are on host machine, you can add mounts like below:

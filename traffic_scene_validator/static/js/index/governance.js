@@ -1,6 +1,7 @@
 function updateModeButtons() {
         document.getElementById('mode-governance').classList.toggle('active', currentMode === 'governance');
         document.getElementById('mode-relation').classList.toggle('active', currentMode === 'relation');
+    document.getElementById('mode-signal').classList.toggle('active', currentMode === 'signal');
     }
 
     function updateProgressAndMeta() {
@@ -14,7 +15,10 @@ function updateModeButtons() {
             document.getElementById('meta-assessed').innerText = assessed;
             document.getElementById('meta-pending').innerText = pending;
             document.getElementById('meta-segments').innerText = seg;
-        } else {
+            return;
+        }
+
+        if (currentMode === 'relation') {
             const total = relationState ? relationState.total : 0;
             const assessed = relationState ? relationState.assessed : 0;
             const pending = relationState ? relationState.pending : 0;
@@ -24,13 +28,22 @@ function updateModeButtons() {
             document.getElementById('meta-assessed').innerText = assessed;
             document.getElementById('meta-pending').innerText = pending;
             document.getElementById('meta-segments').innerText = seg;
+            return;
         }
+
+        const health = signalHealthState || {};
+        const online = !!health.ok;
+        document.getElementById('progress-text').innerText = online ? '信号机控制: Agent 在线' : '信号机控制: Agent 未连接';
+        document.getElementById('meta-total').innerText = signalConversation.length;
+        document.getElementById('meta-assessed').innerText = online ? '1' : '0';
+        document.getElementById('meta-pending').innerText = signalBusy ? '1' : '0';
+        document.getElementById('meta-segments').innerText = 'NL';
     }
 
     function updateUndoButton() {
         const canUndo = currentMode === 'governance'
             ? (currentAnalysisTab !== 'pedestrian' && governanceHistory.length > 0)
-            : relationHistory.length > 0;
+            : (currentMode === 'relation' ? relationHistory.length > 0 : false);
         document.getElementById('btn-undo').disabled = !canUndo;
     }
 
@@ -55,12 +68,19 @@ function updateModeButtons() {
             }
             panel.classList.add('show');
             pipelinePanel.style.display = 'block';
-        } else {
+        } else if (currentMode === 'relation') {
             neg.innerHTML = '错误<span class="shortcut">(N)</span>';
             skip.innerHTML = '跳过<span class="shortcut">(S)</span>';
             pos.innerHTML = '正确<span class="shortcut">(Y)</span>';
             panel.classList.remove('show');
             pipelinePanel.style.display = 'none';
+        } else {
+            neg.innerHTML = '高风险确认<span class="shortcut">(N)</span>';
+            skip.innerHTML = '清空会话<span class="shortcut">(S)</span>';
+            pos.innerHTML = '发送指令<span class="shortcut">(Y)</span>';
+            panel.classList.remove('show');
+            pipelinePanel.style.display = 'none';
+            undo.disabled = true;
         }
     }
 
@@ -833,6 +853,9 @@ function updateModeButtons() {
             fillSettingsFields();
         }
         fillPipelineFormDefaults();
+        if (typeof fillSignalSettingsFromConfig === 'function') {
+            fillSignalSettingsFromConfig();
+        }
         updateProgressAndMeta();
         updateUndoButton();
         updatePipelinePanel();

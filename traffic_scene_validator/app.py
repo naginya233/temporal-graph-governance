@@ -3,17 +3,28 @@ import importlib
 import json
 import math
 import os
+import socket
 import subprocess
 import sys
 import threading
+import time
+import urllib.error
+import urllib.request
 from collections import Counter, OrderedDict, deque
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
 from flask import Flask, jsonify, render_template, request, send_file
+try:
+    from flask_cors import CORS
+except Exception:
+    CORS = None
+
 
 app = Flask(__name__)
+if CORS is not None:
+    CORS(app)
 
 # ================= 基础配置 =================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -94,9 +105,9 @@ config: Dict[str, Any] = {
     "pipeline_model": "qwen2-vl",
     "pipeline_max_frames": 20,
     "pipeline_use_llm": True,
-    "pipeline_llm_api_url": "http://8.138.133.71:8080/v1/chat/completions",
+    "pipeline_llm_api_url": "http://host.docker.internal:8001/v1/chat/completions",
     "pipeline_enable_vlm_image": True,
-    "pipeline_llm_timeout": 12,
+    "pipeline_llm_timeout": 25,
     "pipeline_vlm_trigger_mode": "critical_sample",
     "pipeline_vlm_max_calls": 1200,
     "pipeline_vlm_max_ratio": 0.08,
@@ -111,6 +122,39 @@ config: Dict[str, Any] = {
     "pipeline_pedestrian_window_frames": 60,
     "pipeline_pedestrian_busy_threshold": 8,
     "pipeline_pedestrian_saturated_threshold": 14,
+    "signal_agent_base_url": "http://nl-agent:9001",
+    "signal_default_session_id": "traffic-console-default",
+    "signal_default_profile": "readonly",
+    "signal_agent_timeout": 45,
+    "signal_controller_host": "172.25.157.48",
+    "signal_controller_port": 38083,
+    "signal_controller_timeout": 1.0,
+    "signal_controller_poll_interval": 6.0,
+    "signal_send_mode": "private_timing",
+    "signal_cmts_replay_profile": "",
+    "signal_cmts_template_path": "",
+    "signal_cmts_output_path": "",
+    "signal_generate_download_after": False,
+    "signal_phase_semantics_json": "",
+    "signal_channel_map_json": "",
+    "signal_phase_p1": "",
+    "signal_phase_p2": "",
+    "signal_phase_p6": "",
+    "signal_phase_p3": "",
+    "signal_phase_p4": "",
+    "signal_phase_p7": "",
+    "signal_phase_p8": "",
+    "signal_phase_seq": "",
+    "signal_phase_gap_ms": 30,
+    "signal_phase_ack_timeout": 1.0,
+    "signal_phase_verify_ack": True,
+    "signal_phase_context": "",
+    "signal_phase_objective": "",
+    "signal_video_stream_url": "",
+    "signal_stream_base_url": "https://172.25.157.48:18083",
+    "signal_stream_device_id": "2-27",
+    "signal_stream_channel": 0,
+    "signal_visualization_api_url": "",
 }
 
 TARGET_RELATIONS = [
@@ -238,6 +282,36 @@ def _resolve_dir_with_fallback(path_value: Optional[str], fallback_dir: str) -> 
     return preferred or fallback
 
 
+def _normalize_http_base_url(value: Any, default: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        text = default
+    if not text.startswith(("http://", "https://")):
+        text = f"http://{text}"
+    return text.rstrip("/")
+
+
+def _normalize_signal_profile(value: Any, default: str = "readonly") -> str:
+    text = str(value or "").strip().lower()
+    if text in {"readonly", "low-risk", "high-risk"}:
+        return text
+    return default
+
+
+def _normalize_stream_base_url(value: Any, default: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        text = default
+    if not text.startswith(("http://", "https://")):
+        text = f"https://{text}"
+    return text.rstrip("/")
+
+
+def _normalize_udp_host(value: Any, default: str) -> str:
+    text = str(value or "").strip()
+    return text or default
+
+
 def _as_bool(value: Any, default: bool = False) -> bool:
     if value is None:
         return default
@@ -267,6 +341,316 @@ def _as_float(value: Any, default: float, minimum: float = -1e12, maximum: float
     except Exception:
         return default
     return max(minimum, min(maximum, parsed))
+
+
+_signal_controller_seq_lock = threading.Lock()
+_signal_controller_seq = 0
+
+_SIGNAL_HEARTBEAT_REQUEST_BODY = bytes.fromhex("06040201080400")
+_SIGNAL_DETAIL_REQUEST_BODY = bytes.fromhex("060402010b01000b060402010104000101010102")
+_SIGNAL_DETAIL_FALLBACK_REQUEST_BODY = bytes.fromhex("06040201010400")
+
+
+def _signal_controller_config() -> Tuple[str, int, float]:
+    host = _normalize_udp_host(config.get("signal_controller_host", "172.25.157.48"), "172.25.157.48")
+    port = _as_int(config.get("signal_controller_port", 38083), default=38083, minimum=1, maximum=65535)
+    timeout = _as_float(config.get("signal_controller_timeout", 1.0), default=1.0, minimum=0.1, maximum=10.0)
+    return host, port, timeout
+
+
+def _signal_controller_next_seq(step: int = 1) -> int:
+    global _signal_controller_seq
+    with _signal_controller_seq_lock:
+        current = _signal_controller_seq & 0xFF
+        _signal_controller_seq = (_signal_controller_seq + max(1, int(step))) & 0xFF
+        return current
+
+
+def _signal_controller_build_heartbeat_request(seq: int) -> bytes:
+    return bytes((0x80, 0x14, seq & 0xFF)) + _SIGNAL_HEARTBEAT_REQUEST_BODY
+
+
+def _signal_controller_build_detail_request(seq: int) -> bytes:
+    return bytes((0x90, 0x16, seq & 0xFF)) + _SIGNAL_DETAIL_REQUEST_BODY
+
+
+def _signal_controller_build_detail_fallback_request(seq: int) -> bytes:
+    # 按协议说明: 80 14 ... 06 04 02 01 01 04 00 可读相位详情
+    return bytes((0x80, 0x14, seq & 0xFF)) + _SIGNAL_DETAIL_FALLBACK_REQUEST_BODY
+
+
+def _signal_controller_hex(data: bytes) -> str:
+    return data.hex(" ")
+
+
+def _signal_controller_parse_heartbeat(data: bytes) -> Dict[str, Any]:
+    parsed: Dict[str, Any] = {
+        "ok": True,
+        "raw_hex": _signal_controller_hex(data),
+        "raw_len": len(data),
+    }
+    if len(data) >= 13 and data[0] == 0xC0 and data[1] == 0x12:
+        flags = data[12]
+        phase_masks = [0x80, 0x40, 0x20, 0x10, 0x08, 0x04]
+        phase_lamps: Dict[str, Any] = {}
+        active_phases: List[str] = []
+        for idx, mask in enumerate(phase_masks, start=1):
+            is_green = bool(flags & mask)
+            key = f"p{idx}"
+            if is_green:
+                active_phases.append(f"P{idx}")
+            phase_lamps[key] = {
+                "phase": idx,
+                "green": is_green,
+                "state": "green" if is_green else "red",
+                "label": "绿灯" if is_green else "红灯",
+                "mask": f"0x{mask:02x}",
+            }
+
+        lamp_state = " / ".join(active_phases) + " 放行" if active_phases else "全红/切换中"
+        parsed.update(
+            {
+                "response_type": "heartbeat",
+                "flags": flags,
+                "flags_hex": f"0x{flags:02x}",
+                "p1_green": bool(flags & 0x80),
+                "lamp_state": lamp_state,
+                "green": bool(active_phases),
+                "active_phases": active_phases,
+                "phase_lamps": phase_lamps,
+            }
+        )
+    else:
+        parsed.update({"response_type": "unknown"})
+    return parsed
+
+
+def _signal_controller_parse_detail(data: bytes) -> Dict[str, Any]:
+    parsed: Dict[str, Any] = {
+        "ok": True,
+        "raw_hex": _signal_controller_hex(data),
+        "raw_len": len(data),
+    }
+    if len(data) >= 10 and data[0] == 0xC0 and data[1] == 0x12:
+        phase_code = int(data[6])
+        # 格式B中的相位号可能是私有码(如 23=P1, 43=P6)，需要归一化为 P1..P6。
+        phase_code_map = {
+            1: 1,
+            2: 2,
+            3: 3,
+            4: 4,
+            5: 5,
+            6: 6,
+            # 十进制私有码
+            23: 1,
+            24: 2,
+            43: 6,
+            44: 4,
+            63: 3,
+            64: 5,
+            # 十六进制字节值(常见抓包展示)
+            0x23: 1,
+            0x24: 2,
+            0x43: 6,
+            0x44: 4,
+            0x63: 3,
+            0x64: 5,
+        }
+        normalized_phase = phase_code_map.get(phase_code)
+        if normalized_phase is None:
+            # 兜底: 按 BCD 风格解析, 例如 0x23 -> P1, 0x43 -> P6
+            hi = (phase_code >> 4) & 0x0F
+            lo = phase_code & 0x0F
+            bcd_map = {
+                (2, 3): 1,
+                (2, 4): 2,
+                (4, 3): 6,
+                (4, 4): 4,
+                (6, 3): 3,
+                (6, 4): 5,
+            }
+            normalized_phase = bcd_map.get((hi, lo))
+        elapsed_seconds = int(data[7])
+        total_candidate_offsets = [9, 8, 11]
+        total_candidates = [int(data[idx]) for idx in total_candidate_offsets if idx < len(data)]
+        # 不同相位帧中总时长字段位置不稳定: P4/P6 常在 byte[9], P1/P2 可能在 byte[8]/byte[11]。
+        # 先挑选不小于 elapsed 且 >=5s 的候选值, 再取最大值作为总时长。
+        plausible_totals = [v for v in total_candidates if v >= max(elapsed_seconds, 5)]
+        if plausible_totals:
+            total_seconds = max(plausible_totals)
+        elif total_candidates:
+            total_seconds = max(total_candidates)
+        else:
+            total_seconds = 0
+        remaining_seconds = max(total_seconds - elapsed_seconds, 0)
+        parsed.update(
+            {
+                "response_type": "detail",
+                "phase_code": phase_code,
+                "phase_index": normalized_phase,
+                "elapsed_seconds": elapsed_seconds,
+                "total_seconds": total_seconds,
+                "remaining_seconds": remaining_seconds,
+                "total_candidates": {
+                    "offsets": total_candidate_offsets,
+                    "values": total_candidates,
+                },
+                "phase_label": f"P{normalized_phase}" if isinstance(normalized_phase, int) else f"码{phase_code}",
+            }
+        )
+    else:
+        parsed.update({"response_type": "unknown"})
+    return parsed
+
+
+def _signal_dual_ring_peer_phase(phase_code: int) -> Optional[int]:
+    # 双环并行配对: Ring1(P1->P6->P3), Ring2(P2->P4->P5)
+    dual_ring_pairs = {
+        1: 2,
+        2: 1,
+        6: 4,
+        4: 6,
+        3: 5,
+        5: 3,
+    }
+    return dual_ring_pairs.get(int(phase_code))
+
+
+def _signal_controller_roundtrip() -> Dict[str, Any]:
+    host, port, timeout = _signal_controller_config()
+    seq0 = _signal_controller_next_seq(step=3)
+    heartbeat_request = _signal_controller_build_heartbeat_request(seq0)
+    detail_request = _signal_controller_build_detail_request((seq0 + 1) & 0xFF)
+    detail_fallback_request = _signal_controller_build_detail_fallback_request((seq0 + 2) & 0xFF)
+
+    heartbeat_response: Dict[str, Any] = {"ok": False, "error": "no response"}
+    detail_response: Dict[str, Any] = {"ok": False, "error": "no response"}
+    heartbeat_error = ""
+    detail_error = ""
+
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(timeout)
+
+        def _exchange(frame: bytes) -> Tuple[Optional[bytes], str]:
+            try:
+                sock.sendto(frame, (host, port))
+                data, _ = sock.recvfrom(4096)
+                return data, ""
+            except socket.timeout:
+                return None, f"UDP poll timeout after {timeout:.1f}s"
+            except OSError as exc:
+                return None, str(exc)
+
+        heartbeat_data, heartbeat_error = _exchange(heartbeat_request)
+        if heartbeat_data is not None:
+            heartbeat_response = _signal_controller_parse_heartbeat(heartbeat_data)
+            heartbeat_response["request_hex"] = _signal_controller_hex(heartbeat_request)
+            heartbeat_response["seq"] = seq0
+        else:
+            heartbeat_response = {
+                "ok": False,
+                "request_hex": _signal_controller_hex(heartbeat_request),
+                "seq": seq0,
+                "error": heartbeat_error,
+            }
+
+        detail_data, detail_error = _exchange(detail_request)
+        if detail_data is not None:
+            detail_response = _signal_controller_parse_detail(detail_data)
+            detail_response["request_hex"] = _signal_controller_hex(detail_request)
+            detail_response["seq"] = (seq0 + 1) & 0xFF
+            if detail_response.get("response_type") != "detail":
+                fallback_data, fallback_error = _exchange(detail_fallback_request)
+                if fallback_data is not None:
+                    detail_response = _signal_controller_parse_detail(fallback_data)
+                    detail_response["request_hex"] = _signal_controller_hex(detail_fallback_request)
+                    detail_response["seq"] = (seq0 + 2) & 0xFF
+                    detail_response["fallback_used"] = True
+                elif fallback_error:
+                    detail_response["fallback_error"] = fallback_error
+        else:
+            detail_response = {
+                "ok": False,
+                "request_hex": _signal_controller_hex(detail_request),
+                "seq": (seq0 + 1) & 0xFF,
+                "error": detail_error,
+            }
+
+    phase_lamps: Dict[str, Any] = {}
+    if isinstance(heartbeat_response.get("phase_lamps"), dict):
+        phase_lamps = dict(heartbeat_response.get("phase_lamps") or {})
+
+    detail_phase_code = detail_response.get("phase_index")
+    if detail_phase_code is None:
+        detail_phase_code = detail_response.get("phase_code")
+    detail_phase_code_int = int(detail_phase_code) if isinstance(detail_phase_code, int) else None
+    heartbeat_active = heartbeat_response.get("active_phases")
+    heartbeat_active_count = len(heartbeat_active) if isinstance(heartbeat_active, list) else 0
+
+    if detail_phase_code_int is not None and 1 <= detail_phase_code_int <= 6:
+        detail_phase_code = detail_phase_code_int
+        phase_key = f"p{detail_phase_code}"
+        if phase_key not in phase_lamps or heartbeat_active_count <= 1:
+            phase_lamps[phase_key] = {
+                "phase": detail_phase_code,
+                "green": True,
+                "state": "green",
+                "label": "绿灯",
+                "inferred": True,
+            }
+
+        peer_phase = _signal_dual_ring_peer_phase(detail_phase_code)
+        if peer_phase is not None and heartbeat_active_count <= 1:
+            peer_key = f"p{peer_phase}"
+            existing_peer = phase_lamps.get(peer_key)
+            if not isinstance(existing_peer, dict) or not existing_peer.get("green"):
+                phase_lamps[peer_key] = {
+                    "phase": peer_phase,
+                    "green": True,
+                    "state": "green",
+                    "label": "绿灯",
+                    "inferred": True,
+                    "inferred_by": "dual_ring_pair",
+                }
+
+    active_phases = [
+        f"P{meta.get('phase')}"
+        for _, meta in sorted(phase_lamps.items())
+        if isinstance(meta, dict) and meta.get("green") and meta.get("phase") is not None
+    ]
+
+    summary_parts: List[str] = []
+    if active_phases:
+        summary_parts.append("/".join(active_phases) + " 放行")
+    elif heartbeat_response.get("ok"):
+        summary_parts.append(str(heartbeat_response.get("lamp_state") or "全红/切换中"))
+    if detail_response.get("ok") and detail_response.get("phase_code") is not None:
+        summary_parts.append(
+            f"当前相位码 {detail_response.get('phase_code')}，"
+            f"已过 {detail_response.get('elapsed_seconds')}s / {detail_response.get('total_seconds')}s，"
+            f"剩余 {detail_response.get('remaining_seconds')}s"
+        )
+
+    ok = bool(heartbeat_response.get("ok") or detail_response.get("ok"))
+    return {
+        "ok": ok,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "controller": {
+            "host": host,
+            "port": port,
+            "timeout": timeout,
+        },
+        "heartbeat": heartbeat_response,
+        "detail": detail_response,
+        "phase_lamps": phase_lamps,
+        "active_phases": active_phases,
+        "summary": "；".join(summary_parts) if summary_parts else "未收到有效相位状态",
+        "request": {
+            "heartbeat": _signal_controller_hex(heartbeat_request),
+            "detail": _signal_controller_hex(detail_request),
+            "detail_fallback": _signal_controller_hex(detail_fallback_request),
+        },
+    }
 
 
 def _iso_mtime(path: str) -> str:
@@ -1480,11 +1864,11 @@ def _sync_pipeline_defaults() -> None:
     config["pipeline_max_frames"] = _as_int(config.get("pipeline_max_frames", 20), default=20)
     config["pipeline_use_llm"] = _as_bool(config.get("pipeline_use_llm", True), default=True)
     config["pipeline_llm_api_url"] = str(
-        config.get("pipeline_llm_api_url", "http://8.138.133.71:8080/v1/chat/completions")
-        or "http://8.138.133.71:8080/v1/chat/completions"
+        config.get("pipeline_llm_api_url", "http://host.docker.internal:8001/v1/chat/completions")
+        or "http://host.docker.internal:8001/v1/chat/completions"
     ).strip()
     config["pipeline_enable_vlm_image"] = _as_bool(config.get("pipeline_enable_vlm_image", True), default=True)
-    config["pipeline_llm_timeout"] = _as_int(config.get("pipeline_llm_timeout", 12), default=12, minimum=1, maximum=120)
+    config["pipeline_llm_timeout"] = _as_int(config.get("pipeline_llm_timeout", 25), default=25, minimum=1, maximum=120)
     trigger_mode = str(config.get("pipeline_vlm_trigger_mode", "critical_sample") or "critical_sample").strip().lower()
     config["pipeline_vlm_trigger_mode"] = trigger_mode if trigger_mode in VLM_TRIGGER_MODES else "critical_sample"
     config["pipeline_vlm_max_calls"] = _as_int(config.get("pipeline_vlm_max_calls", 1200), default=1200, minimum=0, maximum=1000000)
@@ -1505,6 +1889,58 @@ def _sync_pipeline_defaults() -> None:
         minimum=max(2, int(config["pipeline_pedestrian_busy_threshold"]) + 1),
         maximum=10000,
     )
+    config["signal_agent_base_url"] = _normalize_http_base_url(
+        config.get("signal_agent_base_url", "http://nl-agent:9001"),
+        "http://nl-agent:9001",
+    )
+    config["signal_default_session_id"] = str(
+        config.get("signal_default_session_id", "traffic-console-default") or "traffic-console-default"
+    ).strip() or "traffic-console-default"
+    config["signal_default_profile"] = _normalize_signal_profile(
+        config.get("signal_default_profile", "readonly"),
+        default="readonly",
+    )
+    config["signal_agent_timeout"] = _as_int(
+        config.get("signal_agent_timeout", 45),
+        default=45,
+        minimum=1,
+        maximum=120,
+    )
+    config["signal_controller_host"] = _normalize_udp_host(
+        config.get("signal_controller_host", "172.25.157.48"),
+        "172.25.157.48",
+    )
+    config["signal_controller_port"] = _as_int(
+        config.get("signal_controller_port", 38083),
+        default=38083,
+        minimum=1,
+        maximum=65535,
+    )
+    config["signal_controller_timeout"] = _as_float(
+        config.get("signal_controller_timeout", 1.0),
+        default=1.0,
+        minimum=0.1,
+        maximum=10.0,
+    )
+    config["signal_controller_poll_interval"] = _as_float(
+        config.get("signal_controller_poll_interval", 6.0),
+        default=6.0,
+        minimum=1.0,
+        maximum=60.0,
+    )
+    config["signal_video_stream_url"] = str(config.get("signal_video_stream_url", "") or "").strip()
+    config["signal_stream_base_url"] = _normalize_stream_base_url(
+        config.get("signal_stream_base_url", "https://172.25.157.48:18083"),
+        "https://172.25.157.48:18083",
+    )
+    config["signal_stream_device_id"] = str(config.get("signal_stream_device_id", "2-27") or "2-27").strip() or "2-27"
+    config["signal_stream_channel"] = _as_int(
+        config.get("signal_stream_channel", 0),
+        default=0,
+        minimum=0,
+        maximum=64,
+    )
+    config["signal_visualization_api_url"] = str(config.get("signal_visualization_api_url", "") or "").strip()
 
 
 
@@ -1861,11 +2297,11 @@ def _start_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
     model = str(payload.get("model", config.get("pipeline_model", "qwen2-vl")) or "qwen2-vl")
     use_llm = _as_bool(payload.get("use_llm", config.get("pipeline_use_llm", True)), default=True)
     llm_api_url = str(
-        payload.get("llm_api_url", config.get("pipeline_llm_api_url", "http://8.138.133.71:8080/v1/chat/completions"))
-        or "http://8.138.133.71:8080/v1/chat/completions"
+        payload.get("llm_api_url", config.get("pipeline_llm_api_url", "http://host.docker.internal:8001/v1/chat/completions"))
+        or "http://host.docker.internal:8001/v1/chat/completions"
     ).strip()
     enable_vlm_image = _as_bool(payload.get("enable_vlm_image", config.get("pipeline_enable_vlm_image", True)), default=True)
-    llm_timeout = _as_int(payload.get("llm_timeout", config.get("pipeline_llm_timeout", 12)), default=12, minimum=1, maximum=120)
+    llm_timeout = _as_int(payload.get("llm_timeout", config.get("pipeline_llm_timeout", 25)), default=25, minimum=1, maximum=120)
     vlm_trigger_mode = str(
         payload.get("vlm_trigger_mode", config.get("pipeline_vlm_trigger_mode", "critical_sample"))
         or "critical_sample"
@@ -2205,7 +2641,7 @@ def _build_showcase_payload() -> Dict[str, Any]:
         "pipeline_config": {
             "llm_api_url": str(config.get("pipeline_llm_api_url", "")),
             "enable_vlm_image": bool(config.get("pipeline_enable_vlm_image", True)),
-            "llm_timeout": int(config.get("pipeline_llm_timeout", 12)),
+            "llm_timeout": int(config.get("pipeline_llm_timeout", 25)),
             "vlm_trigger_mode": str(config.get("pipeline_vlm_trigger_mode", "critical_sample")),
             "vlm_max_calls": int(config.get("pipeline_vlm_max_calls", 1200)),
             "vlm_max_ratio": float(config.get("pipeline_vlm_max_ratio", 0.08)),
@@ -2257,6 +2693,44 @@ def get_state():
 @app.route("/api/config", methods=["POST"])
 def update_config():
     data = request.json or {}
+    rebuild_required_keys = {
+        "sg_dir",
+        "img_dir",
+        "schematic_dir",
+        "gov_outputs_dir",
+        "selected_run",
+        "traffic_system_dir",
+        "pipeline_script",
+        "pipeline_python",
+        "pipeline_data_dir",
+        "pipeline_bev_dir",
+        "pipeline_raw_image_dir",
+        "pipeline_label_virtuallidar_dir",
+        "pipeline_label_camera_dir",
+        "pipeline_calib_virtuallidar_to_world_dir",
+        "pipeline_map_elements_dir",
+        "pipeline_model",
+        "pipeline_max_frames",
+        "pipeline_use_llm",
+        "pipeline_llm_api_url",
+        "pipeline_enable_vlm_image",
+        "pipeline_llm_timeout",
+        "pipeline_vlm_trigger_mode",
+        "pipeline_vlm_max_calls",
+        "pipeline_vlm_max_ratio",
+        "pipeline_vlm_sample_every_n",
+        "pipeline_generate_report",
+        "pipeline_following_filter_enabled",
+        "pipeline_following_min_longitudinal_gap",
+        "pipeline_following_max_longitudinal_gap",
+        "pipeline_following_max_lateral_offset",
+        "pipeline_following_min_heading_cos",
+        "pipeline_following_require_same_lane",
+        "pipeline_pedestrian_window_frames",
+        "pipeline_pedestrian_busy_threshold",
+        "pipeline_pedestrian_saturated_threshold",
+    }
+    need_rebuild = any(key in data for key in rebuild_required_keys)
 
     if "sg_dir" in data:
         config["sg_dir"] = _normalize_path(data.get("sg_dir"))
@@ -2299,11 +2773,11 @@ def update_config():
     if "pipeline_use_llm" in data:
         config["pipeline_use_llm"] = _as_bool(data.get("pipeline_use_llm"), default=True)
     if "pipeline_llm_api_url" in data:
-        config["pipeline_llm_api_url"] = str(data.get("pipeline_llm_api_url") or "http://8.138.133.71:8080/v1/chat/completions").strip()
+        config["pipeline_llm_api_url"] = str(data.get("pipeline_llm_api_url") or "http://host.docker.internal:8001/v1/chat/completions").strip()
     if "pipeline_enable_vlm_image" in data:
         config["pipeline_enable_vlm_image"] = _as_bool(data.get("pipeline_enable_vlm_image"), default=True)
     if "pipeline_llm_timeout" in data:
-        config["pipeline_llm_timeout"] = _as_int(data.get("pipeline_llm_timeout"), default=12, minimum=1, maximum=120)
+        config["pipeline_llm_timeout"] = _as_int(data.get("pipeline_llm_timeout"), default=25, minimum=1, maximum=120)
     if "pipeline_vlm_trigger_mode" in data:
         incoming_trigger_mode = str(data.get("pipeline_vlm_trigger_mode") or "critical_sample").strip().lower()
         config["pipeline_vlm_trigger_mode"] = incoming_trigger_mode if incoming_trigger_mode in VLM_TRIGGER_MODES else "critical_sample"
@@ -2334,10 +2808,128 @@ def update_config():
     if "pipeline_pedestrian_saturated_threshold" in data:
         config["pipeline_pedestrian_saturated_threshold"] = _as_int(data.get("pipeline_pedestrian_saturated_threshold"), default=14, minimum=2, maximum=10000)
 
+    if "signal_agent_base_url" in data:
+        config["signal_agent_base_url"] = _normalize_http_base_url(
+            data.get("signal_agent_base_url"),
+            str(config.get("signal_agent_base_url", "http://nl-agent:9001")),
+        )
+    if "signal_default_session_id" in data:
+        config["signal_default_session_id"] = str(
+            data.get("signal_default_session_id") or "traffic-console-default"
+        ).strip() or "traffic-console-default"
+    if "signal_default_profile" in data:
+        config["signal_default_profile"] = _normalize_signal_profile(
+            data.get("signal_default_profile"),
+            default=str(config.get("signal_default_profile", "readonly")),
+        )
+    if "signal_agent_timeout" in data:
+        config["signal_agent_timeout"] = _as_int(
+            data.get("signal_agent_timeout"),
+            default=int(config.get("signal_agent_timeout", 45)),
+            minimum=1,
+            maximum=120,
+        )
+    if "signal_controller_host" in data:
+        config["signal_controller_host"] = _normalize_udp_host(
+            data.get("signal_controller_host"),
+            str(config.get("signal_controller_host", "172.25.157.48")),
+        )
+    if "signal_controller_port" in data:
+        config["signal_controller_port"] = _as_int(
+            data.get("signal_controller_port"),
+            default=int(config.get("signal_controller_port", 38083)),
+            minimum=1,
+            maximum=65535,
+        )
+    if "signal_controller_timeout" in data:
+        config["signal_controller_timeout"] = _as_float(
+            data.get("signal_controller_timeout"),
+            default=float(config.get("signal_controller_timeout", 1.0)),
+            minimum=0.1,
+            maximum=10.0,
+        )
+    if "signal_controller_poll_interval" in data:
+        config["signal_controller_poll_interval"] = _as_float(
+            data.get("signal_controller_poll_interval"),
+            default=float(config.get("signal_controller_poll_interval", 6.0)),
+            minimum=1.0,
+            maximum=60.0,
+        )
+    if "signal_send_mode" in data:
+        incoming_send_mode = str(data.get("signal_send_mode") or "private_timing").strip().lower()
+        config["signal_send_mode"] = incoming_send_mode if incoming_send_mode in {"private_timing", "download_cmts", "generate_cmts"} else "private_timing"
+    if "signal_cmts_replay_profile" in data:
+        config["signal_cmts_replay_profile"] = str(data.get("signal_cmts_replay_profile") or "").strip()
+    if "signal_cmts_template_path" in data:
+        config["signal_cmts_template_path"] = str(data.get("signal_cmts_template_path") or "").strip()
+    if "signal_cmts_output_path" in data:
+        config["signal_cmts_output_path"] = str(data.get("signal_cmts_output_path") or "").strip()
+    if "signal_generate_download_after" in data:
+        config["signal_generate_download_after"] = _as_bool(data.get("signal_generate_download_after"), default=False)
+    if "signal_phase_semantics_json" in data:
+        config["signal_phase_semantics_json"] = str(data.get("signal_phase_semantics_json") or "").strip()
+    if "signal_channel_map_json" in data:
+        config["signal_channel_map_json"] = str(data.get("signal_channel_map_json") or "").strip()
+    if "signal_phase_p1" in data:
+        config["signal_phase_p1"] = str(data.get("signal_phase_p1") or "").strip()
+    if "signal_phase_p2" in data:
+        config["signal_phase_p2"] = str(data.get("signal_phase_p2") or "").strip()
+    if "signal_phase_p6" in data:
+        config["signal_phase_p6"] = str(data.get("signal_phase_p6") or "").strip()
+    if "signal_phase_p3" in data:
+        config["signal_phase_p3"] = str(data.get("signal_phase_p3") or "").strip()
+    if "signal_phase_p4" in data:
+        config["signal_phase_p4"] = str(data.get("signal_phase_p4") or "").strip()
+    if "signal_phase_p7" in data:
+        config["signal_phase_p7"] = str(data.get("signal_phase_p7") or "").strip()
+    if "signal_phase_p8" in data:
+        config["signal_phase_p8"] = str(data.get("signal_phase_p8") or "").strip()
+    if "signal_phase_seq" in data:
+        config["signal_phase_seq"] = str(data.get("signal_phase_seq") or "").strip()
+    if "signal_phase_gap_ms" in data:
+        config["signal_phase_gap_ms"] = _as_int(
+            data.get("signal_phase_gap_ms"),
+            default=int(config.get("signal_phase_gap_ms", 30)),
+            minimum=0,
+            maximum=1000,
+        )
+    if "signal_phase_ack_timeout" in data:
+        config["signal_phase_ack_timeout"] = _as_float(
+            data.get("signal_phase_ack_timeout"),
+            default=float(config.get("signal_phase_ack_timeout", 1.0)),
+            minimum=0.1,
+            maximum=30.0,
+        )
+    if "signal_phase_verify_ack" in data:
+        config["signal_phase_verify_ack"] = _as_bool(data.get("signal_phase_verify_ack"), default=True)
+    if "signal_phase_context" in data:
+        config["signal_phase_context"] = str(data.get("signal_phase_context") or "").strip()
+    if "signal_phase_objective" in data:
+        config["signal_phase_objective"] = str(data.get("signal_phase_objective") or "").strip()
+    if "signal_video_stream_url" in data:
+        config["signal_video_stream_url"] = str(data.get("signal_video_stream_url") or "").strip()
+    if "signal_stream_base_url" in data:
+        config["signal_stream_base_url"] = _normalize_stream_base_url(
+            data.get("signal_stream_base_url"),
+            str(config.get("signal_stream_base_url", "https://172.25.157.48:18083")),
+        )
+    if "signal_stream_device_id" in data:
+        config["signal_stream_device_id"] = str(data.get("signal_stream_device_id") or "2-27").strip() or "2-27"
+    if "signal_stream_channel" in data:
+        config["signal_stream_channel"] = _as_int(
+            data.get("signal_stream_channel"),
+            default=int(config.get("signal_stream_channel", 0)),
+            minimum=0,
+            maximum=64,
+        )
+    if "signal_visualization_api_url" in data:
+        config["signal_visualization_api_url"] = str(data.get("signal_visualization_api_url") or "").strip()
+
     _sync_pipeline_defaults()
     save_config()
-    build_or_load_index(force_rebuild=True)
-    build_or_load_governance_index(force_rebuild=True)
+    if need_rebuild:
+        build_or_load_index(force_rebuild=True)
+        build_or_load_governance_index(force_rebuild=True)
     return jsonify({"success": True})
 
 
@@ -2661,6 +3253,162 @@ def stop_pipeline():
     return jsonify(result), code
 
 
+def _signal_agent_json_request(method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Tuple[int, Dict[str, Any], str, int]:
+    start = time.monotonic()
+
+    def _elapsed_ms() -> int:
+        return int((time.monotonic() - start) * 1000)
+
+    base_url = _normalize_http_base_url(
+        config.get("signal_agent_base_url", "http://nl-agent:9001"),
+        "http://nl-agent:9001",
+    )
+    timeout = _as_int(config.get("signal_agent_timeout", 45), default=45, minimum=1, maximum=120)
+    url = f"{base_url}{path}"
+
+    data = None
+    headers = {
+        "Accept": "application/json",
+    }
+    if payload is not None:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        headers["Content-Type"] = "application/json; charset=utf-8"
+
+    req = urllib.request.Request(url=url, method=method.upper(), headers=headers, data=data)
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            body = json.loads(raw) if raw else {}
+            if not isinstance(body, dict):
+                body = {"ok": True, "data": body}
+            return int(resp.getcode() or 200), body, "", _elapsed_ms()
+    except urllib.error.HTTPError as exc:
+        raw = ""
+        try:
+            raw = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            raw = ""
+        try:
+            body = json.loads(raw) if raw else {}
+            if not isinstance(body, dict):
+                body = {"ok": False, "data": body}
+        except Exception:
+            body = {"ok": False, "message": raw or str(exc)}
+        return int(exc.code or 502), body, str(exc), _elapsed_ms()
+    except Exception as exc:
+        return 0, {"ok": False, "message": str(exc)}, str(exc), _elapsed_ms()
+
+
+@app.route("/api/signal/health", methods=["GET"])
+def signal_health():
+    status_code, body, err, latency_ms = _signal_agent_json_request("GET", "/health")
+    base_url = _normalize_http_base_url(
+        config.get("signal_agent_base_url", "http://nl-agent:9001"),
+        "http://nl-agent:9001",
+    )
+
+    ok = bool(body.get("ok", False)) if isinstance(body, dict) else False
+    if status_code == 0:
+        ok = False
+
+    return jsonify(
+        {
+            "ok": ok,
+            "status_code": status_code,
+            "latency_ms": latency_ms,
+            "endpoint": f"{base_url}/health",
+            "upstream": body if isinstance(body, dict) else {},
+            "message": "" if ok else (err or str(body.get("error") or body.get("message") or "信号机服务不可用")),
+        }
+    )
+
+
+@app.route("/api/signal/chat", methods=["POST"])
+def signal_chat():
+    data = request.json or {}
+    message = str(data.get("message") or "").strip()
+    if not message:
+        return jsonify({"success": False, "message": "message 不能为空"}), 400
+
+    session_id = str(
+        data.get("session_id")
+        or config.get("signal_default_session_id", "traffic-console-default")
+        or "traffic-console-default"
+    ).strip() or "traffic-console-default"
+
+    profile = _normalize_signal_profile(
+        data.get("profile"),
+        default=str(config.get("signal_default_profile", "readonly")),
+    )
+
+    phase_timing_request = data.get("phase_timing_request")
+    if isinstance(phase_timing_request, str):
+        try:
+            parsed_phase_timing_request = json.loads(phase_timing_request)
+        except Exception:
+            parsed_phase_timing_request = {"raw": phase_timing_request}
+    elif isinstance(phase_timing_request, dict):
+        parsed_phase_timing_request = phase_timing_request
+    elif phase_timing_request is None:
+        parsed_phase_timing_request = None
+    else:
+        parsed_phase_timing_request = {"raw": phase_timing_request}
+
+    payload = {
+        "message": message,
+        "session_id": session_id,
+        "profile": profile,
+        "high_risk_confirmed": _as_bool(data.get("high_risk_confirmed"), default=False),
+    }
+    if parsed_phase_timing_request is not None:
+        payload["phase_timing_request"] = parsed_phase_timing_request
+
+    status_code, body, err, latency_ms = _signal_agent_json_request("POST", "/chat", payload=payload)
+    if status_code == 0:
+        return jsonify({"success": False, "message": err or "信号机服务不可达", "latency_ms": latency_ms}), 502
+
+    if status_code >= 400:
+        message_text = ""
+        if isinstance(body, dict):
+            message_text = str(body.get("error") or body.get("message") or "")
+        return jsonify(
+            {
+                "success": False,
+                "status_code": status_code,
+                "latency_ms": latency_ms,
+                "message": message_text or "信号机接口调用失败",
+                "upstream": body if isinstance(body, dict) else {},
+            }
+        ), 502
+
+    return jsonify(
+        {
+            "success": True,
+            "status_code": status_code,
+            "latency_ms": latency_ms,
+            "response": body if isinstance(body, dict) else {},
+            "session_id": session_id,
+            "profile": profile,
+        }
+    )
+
+
+@app.route("/api/signal/status", methods=["GET"])
+def signal_status():
+    try:
+        payload = _signal_controller_roundtrip()
+        return jsonify(payload)
+    except Exception as exc:
+        return jsonify(
+            {
+                "ok": False,
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+                "error": str(exc),
+            }
+        ), 502
+
+
 @app.route("/api/image")
 def serve_image():
     path = request.args.get("path", "")
@@ -2678,6 +3426,7 @@ if __name__ == "__main__":
     print("TrafficDataset Scene Graph 校对系统已启动")
     print("主功能: 治理运行与可视化审阅")
     print("次功能: 关系校对")
+    print("扩展功能: 信号机控制 LLM")
     print(f"请打开: http://{host}:{port}")
     print("====================================")
     app.run(host=host, debug=debug, port=port)

@@ -38,6 +38,9 @@
     let zoomLayersCache = [null, null];
     let panRafId = [0, 0];
     let panPendingOrigin = [null, null];
+    let signalHealthState = { ok: false, status_code: 0, message: '' };
+    let signalConversation = [];
+    let signalBusy = false;
 
     const UI_PREFS_KEY = 'traffic_console_ui_prefs_v1';
     let uiPrefs = {
@@ -48,22 +51,49 @@
         motionEnabled: true,
     };
 
-    async function apiGet(url) {
-        const res = await fetch(url);
-        return await res.json();
+    async function _fetchJsonWithTimeout(url, options = {}, timeoutMs = 15000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const res = await fetch(url, {
+                ...options,
+                signal: controller.signal,
+            });
+            const text = await res.text();
+            let body = {};
+            try {
+                body = text ? JSON.parse(text) : {};
+            } catch (_) {
+                body = { message: text || '响应解析失败' };
+            }
+            if (!res.ok) {
+                throw new Error(body.message || `请求失败(${res.status})`);
+            }
+            return body;
+        } catch (err) {
+            if (err && err.name === 'AbortError') {
+                throw new Error('请求超时，请稍后重试');
+            }
+            throw err;
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
-    async function apiPost(url, payload) {
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload || {})
-        });
-        const body = await res.json();
-        if (!res.ok) {
-            throw new Error(body.message || '请求失败');
-        }
-        return body;
+    async function apiGet(url, timeoutMs = 15000) {
+        return await _fetchJsonWithTimeout(url, {}, timeoutMs);
+    }
+
+    async function apiPost(url, payload, timeoutMs = 20000) {
+        return await _fetchJsonWithTimeout(
+            url,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload || {}),
+            },
+            timeoutMs,
+        );
     }
 
     function _resolveUiTheme(theme) {

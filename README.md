@@ -217,6 +217,7 @@ Dynamic BEV requires:
 
 - Local run: Python 直接运行 app.py 与 pipeline.py。
 - Docker: 使用 Dockerfile 或 docker-compose.yml 启动。
+- Docker Compose 会同时启动 Web 控制台和 NL Agent，网页默认通过 `nl-agent:9001` 访问 NL Agent。
 - Edge Linux: 可使用 scripts/deploy_df2e518_linux.sh 一键部署。
 
 ---
